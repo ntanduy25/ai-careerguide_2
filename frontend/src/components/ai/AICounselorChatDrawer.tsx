@@ -1,54 +1,50 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Sparkles,
   BrainCircuit,
-  ShieldCheck,
-  Send,
-  MessageSquare,
-  Compass,
-  ArrowRight,
   X,
-  RotateCcw,
-  CheckCircle2,
-  AlertCircle,
-  BookOpen,
-  HelpCircle,
-  ChevronDown,
-  ChevronUp,
+  Send,
   Loader2,
-  Lock,
+  Sparkles,
+  RotateCcw,
+  ShieldCheck,
+  CheckCircle2,
+  BookOpen,
+  ArrowRight,
+  HelpCircle,
+  MapPin,
+  ExternalLink,
 } from 'lucide-react';
-import { AIChatMessage, AIChatResponse } from '../../types';
-import { aiGuidanceService, diagnosticService } from '../../services/careerServices';
-import { getScopedItem } from '../../utils/userStorage';
+import { aiGuidanceService } from '../../services/careerServices';
+import { AIChatMessage, AIChatResponse, UserRole } from '../../types';
 import { AIMarkdownRenderer } from './AIMarkdownRenderer';
+import { getScopedItem } from '../../utils/userStorage';
 
 interface AICounselorChatDrawerProps {
+  userId?: string;
+  majorCode?: string;
+  majorName?: string;
   isOpen?: boolean;
   onClose?: () => void;
-  majorCode?: string | null;
-  majorName?: string | null;
-  riasecScores?: Record<string, number>;
-  grades?: Record<string, number>;
-  diagnosticMasteredSkills?: string[];
-  userId?: string | null;
   onNavigateToRoadmap?: (majorCode: string) => void;
 }
 
-const INITIAL_WELCOME_MESSAGE = (majorName?: string | null): string => {
+const INITIAL_WELCOME_MESSAGE = (majorName?: string | null) => {
   if (majorName) {
-    return `Chào bạn! Tôi là **Cố vấn Hướng nghiệp AI CareerGuide**.\n\nTôi đang xem xét hồ sơ năng lực của bạn đối với ngành **${majorName}**. Dữ liệu đánh giá gồm có:\n- Điểm bài kiểm tra thiên hướng nghề nghiệp\n- Điểm học bạ THPT các môn trọng điểm\n- Kết quả bài kiểm tra chẩn đoán kỹ năng nền tảng\n\nBạn có thể hỏi tôi về lý do đề xuất, môn cần cải thiện, hoặc nhấn nút **Tạo lộ trình học** bên dưới nhé!`;
-  }
-  return `Chào bạn! Tôi là **Cố vấn Hướng nghiệp AI CareerGuide**.\n\nTôi sẵn sàng giải đáp thắc mắc về lựa chọn ngành học, giải thích lý do đề xuất, phân tích điểm mạnh - điểm yếu và hỗ trợ bạn xây dựng lộ trình học tập cá nhân hóa.\n\n*Lưu ý: Mọi thông tin định danh cá nhân đều được bảo vệ nghiêm ngặt theo Luật 91/2025/QH15. Hệ thống chỉ xử lý điểm số học tập để đưa ra lời khuyên khách quan.*`;
-};
+    return `Xin chào! Tôi là **Cố vấn AI CareerGuide**. Tôi đã nạp bối cảnh ngành **${majorName}** cùng kết quả trắc nghiệm sở thích RIASEC và điểm học bạ THPT của bạn. 
 
-const DEFAULT_PROMPTS_WITH_MAJOR = (majorName: string) => [
-  `Vì sao em phù hợp với ngành ${majorName}?`,
-  `Em cần cải thiện môn học nào để tăng khả năng trúng tuyển?`,
-  `Kết quả test chẩn đoán kỹ năng logic của em giúp ích gì?`,
-  `Tạo lộ trình 4 tuần tự học nền tảng cho ngành này`,
-];
+Bạn muốn tìm hiểu thêm về:
+- Độ tương thích thực tế giữa tính cách của bạn và ngành này?
+- Những môn học hoặc kỹ năng bạn cần tập trung cải thiện?
+- Lộ trình phát triển 4 năm đại học và cơ hội nghề nghiệp tương lai?`;
+  }
+  return `Xin chào! Tôi là **Cố vấn AI CareerGuide** (v1.8 Tuân thủ Luật 91/2025/QH15). 
+
+Tôi được kết nối trực tiếp với ma trận 108 ngành đào tạo cấp IV và hồ sơ học tập của bạn. Hãy đặt bất kỳ câu hỏi nào về:
+- Đánh giá năng lực và sở thích của bạn phù hợp với nhóm ngành nào nhất.
+- Phân tích điểm số các khối thi (A00, A01, D01...).
+- Lộ trình tự học và khắc phục lỗ hổng kiến thức trước khi bước vào giảng đường đại học!`;
+};
 
 const DEFAULT_PROMPTS_GENERAL = [
   'Dựa vào điểm sở thích và học bạ của em, ngành nào phù hợp nhất?',
@@ -57,15 +53,19 @@ const DEFAULT_PROMPTS_GENERAL = [
   'Ngành STEM và ngành Kinh tế - Xã hội có điểm khác biệt gì?',
 ];
 
+const DEFAULT_PROMPTS_WITH_MAJOR = (majorName: string) => [
+  `Ngành ${majorName} đòi hỏi những phẩm chất và kỹ năng gì nhất?`,
+  `Điểm học bạ của em vào ngành ${majorName} có điểm mạnh gì?`,
+  `Lộ trình 4 năm của ngành ${majorName} nên học thêm chứng chỉ gì?`,
+  `Cơ hội việc làm và thu nhập thực tế của ngành ${majorName} ra sao?`,
+];
+
 export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
-  isOpen: controlledIsOpen,
-  onClose: controlledOnClose,
+  userId: propUserId,
   majorCode: propMajorCode,
   majorName: propMajorName,
-  riasecScores: propRiasecScores,
-  grades: propGrades,
-  diagnosticMasteredSkills: propDiagnosticMasteredSkills,
-  userId: propUserId,
+  isOpen: controlledIsOpen,
+  onClose: controlledOnClose,
   onNavigateToRoadmap,
 }) => {
   const navigate = useNavigate();
@@ -102,8 +102,8 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isResizingRef.current) return;
       const newWidth = window.innerWidth - moveEvent.clientX;
-      const minW = 380;
-      const maxW = Math.min(920, window.innerWidth - 40);
+      const minW = 340;
+      const maxW = Math.min(920, window.innerWidth - 20);
       if (newWidth >= minW && newWidth <= maxW) {
         setDrawerWidth(newWidth);
       }
@@ -141,7 +141,6 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
       if (e.detail?.majorName) {
         setCurrentMajorName(e.detail.majorName);
         setSuggestedFollowups(DEFAULT_PROMPTS_WITH_MAJOR(e.detail.majorName));
-        // Add a prompt note if switching major
         setMessages((prev) => [
           ...prev,
           {
@@ -160,16 +159,12 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
     };
   }, []);
 
-  // Auto-scroll chat to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
+  // Auto scroll to bottom
   useEffect(() => {
     if (isDrawerOpen) {
-      scrollToBottom();
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isDrawerOpen]);
+  }, [messages, isDrawerOpen, isSending]);
 
   const handleClose = () => {
     if (controlledOnClose) {
@@ -188,61 +183,41 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
       },
     ]);
     setSuggestedFollowups(
-      currentMajorName ? DEFAULT_PROMPTS_WITH_MAJOR(currentMajorName) : DEFAULT_PROMPTS_GENERAL
+      currentMajorName
+        ? DEFAULT_PROMPTS_WITH_MAJOR(currentMajorName)
+        : DEFAULT_PROMPTS_GENERAL
     );
   };
 
-  // Helper to extract student test inputs if not passed directly via props
+  // Helper to extract student inputs from storage for grounding
   const getResolvedInputs = () => {
-    let resolvedGrades: Record<string, number> | undefined = propGrades;
-    if (!resolvedGrades) {
-      try {
-        const raw = getScopedItem('student_grades', propUserId);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          resolvedGrades = {
-            'Toán': parsed.math || 0,
-            'Vật lý': parsed.physics || 0,
-            'Hóa học': parsed.chemistry || 0,
-            'Sinh học': parsed.biology || 0,
-            'Tin học': parsed.informatics || 0,
-            'Ngữ văn': parsed.literature || 0,
-            'Lịch sử': parsed.history || 0,
-            'Địa lý': parsed.geography || 0,
-            'Tiếng Anh': parsed.english || 0,
-          };
-        }
-      } catch (e) {
-        console.warn('Could not read student_grades from storage', e);
+    let grades: Record<string, number> | undefined;
+    let diagnostics: string[] | undefined;
+    let riasec: Record<string, number> | undefined;
+
+    try {
+      const storedGrades = getScopedItem('careerguide_academic_grades');
+      if (storedGrades) grades = JSON.parse(storedGrades);
+    } catch {}
+
+    try {
+      const storedDiag = getScopedItem('careerguide_diagnostic_results');
+      if (storedDiag) {
+        const diagObj = JSON.parse(storedDiag);
+        diagnostics = Object.keys(diagObj).filter((k) => diagObj[k]?.passed);
       }
-    }
+    } catch {}
 
-    let resolvedDiagnostics: string[] | undefined = propDiagnosticMasteredSkills;
-    if (!resolvedDiagnostics) {
-      resolvedDiagnostics = diagnosticService.getMasteredSkillCodes(propUserId);
-    }
+    try {
+      const storedVector = getScopedItem('careerguide_riasec_vector');
+      if (storedVector) riasec = JSON.parse(storedVector);
+    } catch {}
 
-    let resolvedRiasec: Record<string, number> | undefined = propRiasecScores;
-    if (!resolvedRiasec) {
-      try {
-        const raw = getScopedItem('calculated_vector', propUserId);
-        if (raw) {
-          resolvedRiasec = JSON.parse(raw);
-        }
-      } catch (e) {
-        console.warn('Could not read calculated_vector from storage', e);
-      }
-    }
-
-    return {
-      grades: resolvedGrades,
-      diagnostics: resolvedDiagnostics,
-      riasec: resolvedRiasec,
-    };
+    return { grades, diagnostics, riasec };
   };
 
-  const handleSendMessage = async (textToSend?: string) => {
-    const text = (textToSend || inputMessage).trim();
+  const handleSendMessage = async (customText?: string) => {
+    const text = (customText || inputMessage).trim();
     if (!text || isSending) return;
 
     const userMsg: AIChatMessage = {
@@ -339,13 +314,13 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
               setInternalIsOpen(true);
             }
           }}
-          className="fixed bottom-6 right-6 z-40 flex items-center space-x-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs shadow-lg hover:shadow-xl hover:from-blue-700 hover:to-indigo-700 transition-all transform hover:-translate-y-0.5 active:translate-y-0 group cursor-pointer"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center space-x-2 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-bold text-xs shadow-lg hover:shadow-xl hover:from-blue-700 hover:to-indigo-700 transition-all transform hover:-translate-y-0.5 active:translate-y-0 group cursor-pointer"
           title="Trò chuyện với Cố vấn Hướng nghiệp AI"
           aria-label="Mở Cố vấn AI"
         >
-          <span className="relative flex h-3 w-3">
+          <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
           </span>
           <BrainCircuit className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
           <span className="tracking-wide">Hỏi Cố vấn AI</span>
@@ -354,10 +329,12 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
 
       {/* Slide-over Chat Drawer */}
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
           <div
-            style={{ width: `${drawerWidth}px` }}
-            className="w-full max-w-full relative bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200"
+            style={{
+              width: typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : `${drawerWidth}px`,
+            }}
+            className="w-full sm:max-w-xl max-w-full relative bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200"
           >
             {/* Left Edge Resize Drag Handle (Visible on PC) */}
             <div
@@ -369,20 +346,20 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
             </div>
 
             {/* Header */}
-            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-xs">
-                  <BrainCircuit className="w-5 h-5" />
+            <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2.5 sm:space-x-3">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <BrainCircuit className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
-                    <h3 className="text-sm font-bold text-slate-900">
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-900">
                       Cố Vấn Hướng Nghiệp AI
                     </h3>
                     <button
                       type="button"
                       onClick={() => setShowCounselorInfo(!showCounselorInfo)}
-                      className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-black transition-all cursor-pointer ${
+                      className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[11px] font-black transition-all cursor-pointer ${
                         showCounselorInfo
                           ? 'bg-blue-600 text-white shadow-xs'
                           : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200'
@@ -392,6 +369,10 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
                       !
                     </button>
                   </div>
+                  <p className="text-[10px] text-slate-500 flex items-center space-x-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                    <span>Sẵn sàng hỗ trợ trực tuyến</span>
+                  </p>
                 </div>
               </div>
 
@@ -399,7 +380,7 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
                 <button
                   type="button"
                   onClick={handleClearChat}
-                  className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                  className="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
                   title="Xóa đoạn chat làm lại"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -407,7 +388,7 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                  className="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
                   title="Đóng cửa sổ chat"
                 >
                   <X className="w-5 h-5" />
@@ -417,7 +398,7 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
 
             {/* Merged Info Box (Triggered by the ! button) */}
             {showCounselorInfo && (
-              <div className="px-5 py-3.5 bg-blue-50/80 border-b border-blue-200 text-xs text-slate-700 space-y-2 animate-in fade-in duration-150 shrink-0">
+              <div className="px-4 py-3 sm:px-5 sm:py-3.5 bg-blue-50/80 border-b border-blue-200 text-xs text-slate-700 space-y-2 animate-in fade-in duration-150 shrink-0">
                 <div className="flex items-start space-x-2">
                   <BrainCircuit className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                   <p className="text-[11.5px] leading-relaxed">
@@ -440,104 +421,80 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
 
             {/* Context Banner: Active Major Context & Roadmap CTA */}
             {currentMajorName && (
-              <div className="px-5 py-2.5 bg-blue-50/90 border-b border-blue-100 flex items-center justify-between shrink-0">
+              <div className="px-4 py-2 sm:px-5 sm:py-2.5 bg-indigo-50/90 border-b border-indigo-100 flex items-center justify-between shrink-0">
                 <div className="flex items-center space-x-2 min-w-0 pr-2">
-                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-600 text-white shrink-0">
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-600 text-white shrink-0">
                     {currentMajorCode || 'NGÀNH'}
                   </span>
-                  <span className="text-xs font-semibold text-blue-900 truncate">
+                  <span className="text-xs font-semibold text-indigo-900 truncate">
                     {currentMajorName}
                   </span>
                 </div>
-                <div className="flex items-center space-x-1.5 shrink-0">
+
+                {currentMajorCode && (
                   <button
                     type="button"
                     onClick={handleGoToRoadmap}
-                    className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 bg-white hover:bg-blue-100/70 border border-blue-200 px-2 py-1 rounded-md flex items-center space-x-1 transition-colors shadow-2xs"
-                    title="Tạo lộ trình tự học"
+                    className="shrink-0 px-2.5 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold flex items-center space-x-1 transition-colors shadow-2xs"
                   >
-                    <Compass className="w-3 h-3 text-blue-600" />
-                    <span>Lộ trình học</span>
+                    <span>Lộ trình</span>
                     <ArrowRight className="w-3 h-3" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrentMajorCode(null);
-                      setCurrentMajorName(null);
-                      setSuggestedFollowups(DEFAULT_PROMPTS_GENERAL);
-                    }}
-                    className="text-slate-400 hover:text-slate-600 p-0.5"
-                    title="Bỏ ngữ cảnh ngành này"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                )}
               </div>
             )}
 
-
-
-            {/* Messages Scroll Area */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-              {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start items-start space-x-2.5'}`}
-                >
-                  {msg.role === 'assistant' && (
-                    <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
-                      <Sparkles className="w-3.5 h-3.5" />
-                    </div>
-                  )}
-
+            {/* Conversation Messages */}
+            <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-3.5 sm:space-y-4">
+              {messages.map((msg, idx) => {
+                const isUser = msg.role === 'user';
+                return (
                   <div
-                    className={`max-w-[88%] sm:max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-tr-xs shadow-xs text-[13px] sm:text-sm'
-                        : 'bg-white text-slate-800 rounded-tl-xs border border-slate-200/90 shadow-2xs'
-                    }`}
+                    key={idx}
+                    className={`flex items-start space-x-2.5 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`}
                   >
-                    {msg.role === 'assistant' ? (
-                      <div>
-                        <div className="flex items-center space-x-1.5 mb-1.5 pb-1 border-b border-slate-100">
-                          <span className="font-bold text-[11px] text-slate-800">Cố vấn AI CareerGuide</span>
-                          <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-blue-100 text-blue-700 rounded-full">
-                            AI Engine
-                          </span>
-                        </div>
-                        <AIMarkdownRenderer content={msg.content} />
+                    {!isUser ? (
+                      <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                        <BrainCircuit className="w-4 h-4" />
                       </div>
                     ) : (
-                      <div className="whitespace-pre-line text-[13px] sm:text-sm">
-                        {msg.content}
+                      <div className="w-7 h-7 rounded-xl bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5 text-xs font-bold">
+                        Bạn
                       </div>
                     )}
 
-                    {msg.created_at && (
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm leading-relaxed ${
+                        isUser
+                          ? 'bg-blue-600 text-white rounded-tr-xs shadow-xs'
+                          : 'bg-slate-50 text-slate-800 rounded-tl-xs border border-slate-200/90 shadow-2xs'
+                      }`}
+                    >
+                      {isUser ? (
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      ) : (
+                        <AIMarkdownRenderer content={msg.content} />
+                      )}
+
                       <div
-                        className={`text-[9px] mt-2 flex items-center justify-end space-x-1 ${
-                          msg.role === 'user' ? 'text-blue-100/75' : 'text-slate-400'
+                        className={`text-[10px] mt-1 text-right ${
+                          isUser ? 'text-blue-100' : 'text-slate-400'
                         }`}
                       >
-                        <span>
-                          {new Date(msg.created_at).toLocaleTimeString('vi-VN', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                        {msg.role === 'assistant' && (
-                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
-                        )}
+                        {new Date(msg.created_at || Date.now()).toLocaleTimeString('vi-VN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
+              {/* Typing indicator */}
               {isSending && (
-                <div className="flex justify-start items-start space-x-2.5 animate-pulse">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                <div className="flex items-start space-x-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
                     <Sparkles className="w-3.5 h-3.5 animate-spin" />
                   </div>
                   <div className="bg-white text-slate-700 rounded-2xl rounded-tl-xs px-4 py-3 border border-blue-200/80 shadow-2xs flex items-center space-x-2 text-xs">
@@ -550,20 +507,20 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Suggested Followup Questions (Prompt Pills) - Chỉ hiển thị khi bắt đầu đoạn chat mới, khi đã chat 1 câu thì ẩn đi không hiển thị lại */}
+            {/* Suggested Followup Questions (Prompt Pills) - Gợi ý câu hỏi nhanh */}
             {!messages.some((m) => m.role === 'user') && suggestedFollowups.length > 0 && !isSending && (
-              <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 shrink-0">
-                <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center space-x-1">
+              <div className="px-3 py-2 sm:px-4 sm:py-2.5 bg-slate-50 border-t border-slate-200 shrink-0">
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center space-x-1">
                   <HelpCircle className="w-3 h-3 text-slate-400" />
                   <span>Gợi ý câu hỏi nhanh:</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex overflow-x-auto no-scrollbar gap-1.5 pb-0.5">
                   {suggestedFollowups.map((prompt, pIdx) => (
                     <button
                       key={pIdx}
                       type="button"
                       onClick={() => handleSendMessage(prompt)}
-                      className="text-[11px] text-left px-2.5 py-1 rounded-full bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-300 transition-colors shadow-2xs"
+                      className="text-[11px] whitespace-nowrap shrink-0 text-left px-3 py-1.5 rounded-full bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-300 transition-colors shadow-2xs font-medium cursor-pointer"
                     >
                       {prompt}
                     </button>
@@ -588,7 +545,7 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Hỏi Cố vấn AI về ngành học, môn cần cải thiện..."
-                    className="w-full text-xs rounded-xl border border-slate-300 px-3.5 py-2 text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-shadow"
+                    className="w-full text-sm sm:text-xs rounded-xl border border-slate-300 px-3.5 py-2 text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-shadow"
                     disabled={isSending}
                   />
                   <span className="absolute bottom-1.5 right-2 text-[9px] text-slate-400 pointer-events-none hidden sm:inline">
@@ -616,3 +573,4 @@ export const AICounselorChatDrawer: React.FC<AICounselorChatDrawerProps> = ({
     </>
   );
 };
+export default AICounselorChatDrawer;

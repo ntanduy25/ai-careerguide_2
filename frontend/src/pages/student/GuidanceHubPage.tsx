@@ -591,161 +591,177 @@ export const GuidanceHubPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 4 Step Tabs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Tab 1 */}
+        {/* 4 Step Tabs - Mobile responsive 2x2 grid & semantic color segmentation */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+          {/* Tab 1: RIASEC (Indigo) */}
           <button
             type="button"
             onClick={() => handleTabChange('riasec')}
-            className={`p-4 rounded-lg border text-left transition-colors relative flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-xl border text-left transition-all relative flex flex-col justify-between space-y-2 cursor-pointer ${
               activeTab === 'riasec'
-                ? 'bg-blue-50/40 border-blue-600'
-                : 'bg-white hover:bg-slate-50 border-slate-200'
+                ? 'bg-indigo-50/80 border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs'
+                : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-indigo-200'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-2 sm:space-x-2.5 min-w-0">
                 <span
-                  className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs ${
+                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                     activeTab === 'riasec'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700'
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'bg-indigo-100 text-indigo-700'
                   }`}
                 >
                   1
                 </span>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">1. Khảo Sát Sở Thích & Nhận Thức</div>
-                  <div className="text-[11px] text-slate-500">Holland RIASEC & Đa trí tuệ</div>
+                <div className="truncate">
+                  <div className={`text-xs sm:text-sm font-bold truncate ${activeTab === 'riasec' ? 'text-indigo-950 font-extrabold' : 'text-slate-900'}`}>
+                    1. Sở Thích RIASEC
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 truncate">
+                    Holland &amp; Nhận thức
+                  </div>
                 </div>
               </div>
               {hasTestResults && (
-                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs">
-                  <Check className="w-3 h-3" />
+                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] shrink-0 ml-1">
+                  <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />
                 </span>
               )}
             </div>
 
-            <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
-              <span>Đã trả lời: {totalAnsweredRIASEC}/30 câu</span>
-              <span className="font-semibold text-blue-600">45% trọng số</span>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+              <span className="truncate">{totalAnsweredRIASEC}/30 câu</span>
+              <span className="font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded shrink-0">45%</span>
             </div>
           </button>
 
-          {/* Tab 2 */}
+          {/* Tab 2: Transcript (Emerald) */}
           <button
             type="button"
             onClick={() => handleTabChange('transcript')}
-            className={`p-4 rounded-lg border text-left transition-colors relative flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-xl border text-left transition-all relative flex flex-col justify-between space-y-2 cursor-pointer ${
               activeTab === 'transcript'
-                ? 'bg-blue-50/40 border-blue-600'
-                : 'bg-white hover:bg-slate-50 border-slate-200'
+                ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-emerald-200'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-2 sm:space-x-2.5 min-w-0">
                 <span
-                  className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs ${
+                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                     activeTab === 'transcript'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'bg-emerald-100 text-emerald-700'
                   }`}
                 >
                   2
                 </span>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">2. Điểm Học Bạ & Z-Score</div>
-                  <div className="text-[11px] text-slate-500">9 môn THPT & Khối xét tuyển</div>
+                <div className="truncate">
+                  <div className={`text-xs sm:text-sm font-bold truncate ${activeTab === 'transcript' ? 'text-emerald-950 font-extrabold' : 'text-slate-900'}`}>
+                    2. Điểm Học Bạ
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 truncate">
+                    9 môn &amp; Khối xét tuyển
+                  </div>
                 </div>
               </div>
               {hasTranscriptResults && (
-                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs">
-                  <Check className="w-3 h-3" />
+                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] shrink-0 ml-1">
+                  <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />
                 </span>
               )}
             </div>
 
-            <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
-              <span>{isGradesSaved ? 'Đã lưu học bạ' : 'Chưa lưu điểm'}</span>
-              <span className="font-semibold text-emerald-600">35% trọng số</span>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+              <span className="truncate">{isGradesSaved ? 'Đã lưu điểm' : 'Chưa nhập'}</span>
+              <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded shrink-0">35%</span>
             </div>
           </button>
 
-          {/* Tab 3: Diagnostic Skill Checks */}
+          {/* Tab 3: Diagnostic (Purple) */}
           <button
             type="button"
             onClick={() => handleTabChange('diagnostic')}
-            className={`p-4 rounded-lg border text-left transition-colors relative flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-xl border text-left transition-all relative flex flex-col justify-between space-y-2 cursor-pointer ${
               activeTab === 'diagnostic'
-                ? 'bg-blue-50/40 border-blue-600'
-                : 'bg-white hover:bg-slate-50 border-slate-200'
+                ? 'bg-purple-50/80 border-purple-500 ring-2 ring-purple-500/20 shadow-xs'
+                : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-purple-200'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-2 sm:space-x-2.5 min-w-0">
                 <span
-                  className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs ${
+                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                     activeTab === 'diagnostic'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700'
+                      ? 'bg-purple-600 text-white shadow-2xs'
+                      : 'bg-purple-100 text-purple-700'
                   }`}
                 >
                   3
                 </span>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">3. Chẩn Đoán Kỹ Năng Đầu Vào</div>
-                  <div className="text-[11px] text-slate-500">6 chuyên đề logic & chuyên môn</div>
+                <div className="truncate">
+                  <div className={`text-xs sm:text-sm font-bold truncate ${activeTab === 'diagnostic' ? 'text-purple-950 font-extrabold' : 'text-slate-900'}`}>
+                    3. Test Kỹ Năng
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 truncate">
+                    6 chuyên đề chẩn đoán
+                  </div>
                 </div>
               </div>
               {passedDiagnosticCount > 0 && (
-                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs">
-                  <Check className="w-3 h-3" />
+                <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] shrink-0 ml-1">
+                  <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />
                 </span>
               )}
             </div>
 
-            <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
-              <span>{hasDiagnosticResults ? `Đã làm: ${Object.keys(diagnosticResults).length}/6 đề` : 'Tùy chọn bổ trợ'}</span>
-              <span className="font-semibold text-purple-600">Đạt: {passedDiagnosticCount} kỹ năng</span>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+              <span className="truncate">{hasDiagnosticResults ? `${Object.keys(diagnosticResults).length}/6 đề` : 'Tùy chọn'}</span>
+              <span className="font-bold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded shrink-0">Đạt {passedDiagnosticCount}</span>
             </div>
           </button>
 
-          {/* Tab 4 */}
+          {/* Tab 4: Recommendation (Blue) */}
           <button
             type="button"
             onClick={() => handleTabChange('recommendation')}
-            className={`p-4 rounded-lg border text-left transition-colors relative flex flex-col justify-between space-y-2 ${
+            className={`p-3 sm:p-4 rounded-xl border text-left transition-all relative flex flex-col justify-between space-y-2 cursor-pointer ${
               activeTab === 'recommendation'
-                ? 'bg-blue-50/40 border-blue-600'
-                : 'bg-white hover:bg-slate-50 border-slate-200'
+                ? 'bg-blue-50/80 border-blue-600 ring-2 ring-blue-500/20 shadow-xs'
+                : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-blue-200'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-2 sm:space-x-2.5 min-w-0">
                 <span
-                  className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs ${
+                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                     activeTab === 'recommendation'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700'
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'bg-blue-100 text-blue-700'
                   }`}
                 >
                   4
                 </span>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">4. Đề Xuất Ngành Học XAI</div>
-                  <div className="text-[11px] text-slate-500">Mô hình phễu 2 tầng tất định</div>
+                <div className="truncate">
+                  <div className={`text-xs sm:text-sm font-bold truncate ${activeTab === 'recommendation' ? 'text-blue-950 font-extrabold' : 'text-slate-900'}`}>
+                    4. Đề Xuất Ngành
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 truncate">
+                    Mô hình XAI 2 tầng
+                  </div>
                 </div>
               </div>
               {hasCalculatedRecommendations && (
-                <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs">
-                  <Check className="w-3 h-3" />
+                <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] shrink-0 ml-1">
+                  <Check className="w-3 h-3 text-blue-700 stroke-[3]" />
                 </span>
               )}
             </div>
 
-            <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
-              <span>{hasCalculatedRecommendations ? 'Đã tạo kết quả' : 'Chờ kích hoạt'}</span>
-              <span className="font-semibold text-blue-600">100% tất định</span>
+            <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+              <span className="truncate">{hasCalculatedRecommendations ? 'Đã có kết quả' : 'Chờ chạy'}</span>
+              <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded shrink-0">108 ngành</span>
             </div>
           </button>
         </div>
@@ -790,29 +806,40 @@ export const GuidanceHubPage: React.FC = () => {
           )}
 
           {/* Stepper Navigation */}
-          <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-slate-200 shadow-xs overflow-x-auto">
-            <div className="flex items-center space-x-1 min-w-max">
+          <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-slate-200 shadow-xs overflow-x-auto no-scrollbar">
+            <div className="flex items-center space-x-1.5 min-w-max">
               {riasecGroups.map((g, idx) => {
                 const groupQuestions = riasecQuestions.filter(q => q.dimension === g.dimension);
                 const answeredInGroup = groupQuestions.filter(q => riasecAnswers[q.code] !== undefined).length;
                 const isGroupDone = groupQuestions.length > 0 && answeredInGroup === groupQuestions.length;
                 const isCurrent = assessmentStep === idx;
 
+                const dimColors: Record<string, { current: string; done: string; dot: string }> = {
+                  R: { current: 'bg-sky-600 text-white shadow-xs', done: 'bg-sky-50 text-sky-800 border border-sky-200', dot: 'bg-sky-500' },
+                  I: { current: 'bg-indigo-600 text-white shadow-xs', done: 'bg-indigo-50 text-indigo-800 border border-indigo-200', dot: 'bg-indigo-500' },
+                  A: { current: 'bg-rose-600 text-white shadow-xs', done: 'bg-rose-50 text-rose-800 border border-rose-200', dot: 'bg-rose-500' },
+                  S: { current: 'bg-emerald-600 text-white shadow-xs', done: 'bg-emerald-50 text-emerald-800 border border-emerald-200', dot: 'bg-emerald-500' },
+                  E: { current: 'bg-amber-600 text-white shadow-xs', done: 'bg-amber-50 text-amber-800 border border-amber-200', dot: 'bg-amber-500' },
+                  C: { current: 'bg-purple-600 text-white shadow-xs', done: 'bg-purple-50 text-purple-800 border border-purple-200', dot: 'bg-purple-500' },
+                };
+                const colorConfig = dimColors[g.dimension] || { current: 'bg-blue-600 text-white shadow-xs', done: 'bg-blue-50 text-blue-800 border border-blue-200', dot: 'bg-blue-500' };
+
                 return (
                   <button
                     key={g.dimension}
                     type="button"
                     onClick={() => setAssessmentStep(idx)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center space-x-1.5 ${
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all touch-manipulation flex items-center space-x-1.5 ${
                       isCurrent
-                        ? 'bg-blue-600 text-white shadow-xs'
+                        ? colorConfig.current
                         : isGroupDone
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        ? colorConfig.done
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-transparent'
                     }`}
                   >
+                    <span className={`w-2 h-2 rounded-full ${isCurrent ? 'bg-white' : isGroupDone ? colorConfig.dot : 'bg-slate-300'}`} />
                     <span>{g.name_vi}</span>
-                    {isGroupDone && <Check className="w-3 h-3 text-emerald-600" />}
+                    {isGroupDone && <Check className="w-3.5 h-3.5 shrink-0" />}
                   </button>
                 );
               })}
@@ -820,17 +847,18 @@ export const GuidanceHubPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setAssessmentStep(6)}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center space-x-1.5 ${
+                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all touch-manipulation flex items-center space-x-1.5 ${
                   assessmentStep === 6
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-purple-600 text-white shadow-xs'
                     : totalAnsweredCognitive === cognitiveQuestions.length && cognitiveQuestions.length > 0
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    ? 'bg-purple-50 text-purple-800 border border-purple-200'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-transparent'
                 }`}
               >
+                <span className={`w-2 h-2 rounded-full ${assessmentStep === 6 ? 'bg-white' : totalAnsweredCognitive === cognitiveQuestions.length && cognitiveQuestions.length > 0 ? 'bg-purple-500' : 'bg-slate-300'}`} />
                 <span>Nhận Thức</span>
                 {totalAnsweredCognitive === cognitiveQuestions.length && cognitiveQuestions.length > 0 && (
-                  <Check className="w-3 h-3 text-emerald-600" />
+                  <Check className="w-3.5 h-3.5 shrink-0" />
                 )}
               </button>
             </div>
@@ -838,10 +866,10 @@ export const GuidanceHubPage: React.FC = () => {
             <button
               type="button"
               onClick={handleFullResetAssessment}
-              className="px-2.5 py-1 text-xs text-slate-400 hover:text-rose-600 font-medium flex items-center space-x-1"
+              className="px-2.5 py-1.5 text-xs text-slate-400 hover:text-rose-600 font-medium flex items-center space-x-1 shrink-0 ml-2 rounded-md hover:bg-rose-50 transition-colors"
               title="Làm lại từ đầu"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Làm lại</span>
             </button>
           </div>
@@ -849,10 +877,15 @@ export const GuidanceHubPage: React.FC = () => {
           {/* QUESTIONS: Steps 0-5 (RIASEC Group Questions) */}
           {assessmentStep >= 0 && assessmentStep <= 5 && currentGroupMeta && (
             <div className="bg-white rounded-lg p-5 sm:p-6 border border-slate-200 shadow-sm space-y-5">
-              <div className="border-b border-slate-200 pb-3 space-y-0.5">
-                <h2 className="text-base font-bold text-slate-900">
-                  Nhóm {currentGroupMeta.dimension}: {currentGroupMeta.name_vi} ({currentGroupMeta.name_en})
-                </h2>
+              <div className="border-b border-slate-200 pb-3 space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">
+                    Nhóm {currentGroupMeta.dimension}
+                  </span>
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900">
+                    {currentGroupMeta.name_vi} ({currentGroupMeta.name_en})
+                  </h2>
+                </div>
                 <p className="text-xs text-slate-500">{currentGroupMeta.description}</p>
               </div>
 
@@ -865,44 +898,49 @@ export const GuidanceHubPage: React.FC = () => {
                   return (
                     <div
                       key={q.code}
-                      className={`p-4 rounded-md border transition-colors space-y-3 ${
+                      className={`p-3.5 sm:p-4 rounded-lg border transition-all space-y-3 ${
                         currentScore
-                          ? 'border-blue-200 bg-blue-50/20'
+                          ? 'border-indigo-200 bg-indigo-50/20 shadow-xs'
                           : 'border-slate-200 bg-white'
                       }`}
                     >
                       <div className="flex items-start space-x-3">
-                        <div className="w-7 h-7 rounded bg-slate-100 border border-slate-200 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                          currentScore ? 'bg-indigo-600 text-white' : 'bg-slate-100 border border-slate-200 text-slate-600'
+                        }`}>
                           <IconComp className="w-4 h-4" />
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">{q.question_text}</p>
                         </div>
-
-
                       </div>
 
-
-
-                      {/* Likert Scale 1 - 5 */}
-                      <div className="grid grid-cols-5 gap-2 max-w-xl mx-auto">
+                      {/* Likert Scale 1 - 5 with Color Coding & Touch Friendly */}
+                      <div className="grid grid-cols-5 gap-1.5 sm:gap-2 max-w-xl mx-auto pt-1">
                         {likertScale.map(opt => {
                           const isSelected = currentScore === opt.value;
                           const labelText = getLikertLabel(opt.value, opt.label);
+
+                          const likertStyleMap: Record<number, { active: string; idle: string }> = {
+                            1: { active: 'bg-rose-600 border-rose-600 text-white shadow-sm ring-2 ring-rose-200', idle: 'bg-white hover:bg-rose-50/60 border-slate-200 hover:border-rose-300 text-slate-700' },
+                            2: { active: 'bg-amber-500 border-amber-500 text-white shadow-sm ring-2 ring-amber-200', idle: 'bg-white hover:bg-amber-50/60 border-slate-200 hover:border-amber-300 text-slate-700' },
+                            3: { active: 'bg-slate-600 border-slate-600 text-white shadow-sm ring-2 ring-slate-200', idle: 'bg-white hover:bg-slate-100 border-slate-200 hover:border-slate-300 text-slate-700' },
+                            4: { active: 'bg-teal-600 border-teal-600 text-white shadow-sm ring-2 ring-teal-200', idle: 'bg-white hover:bg-teal-50/60 border-slate-200 hover:border-teal-300 text-slate-700' },
+                            5: { active: 'bg-indigo-600 border-indigo-600 text-white shadow-sm ring-2 ring-indigo-200', idle: 'bg-white hover:bg-indigo-50/60 border-slate-200 hover:border-indigo-300 text-slate-700' },
+                          };
+                          const style = likertStyleMap[opt.value] || { active: 'bg-blue-600 border-blue-600 text-white', idle: 'bg-white border-slate-200 text-slate-700' };
 
                           return (
                             <button
                               key={opt.value}
                               type="button"
                               onClick={() => setRiasecAnswer(q.code, opt.value)}
-                              className={`py-2 px-1 rounded-md text-center border transition-all ${
-                                isSelected
-                                  ? 'bg-blue-600 border-blue-600 text-white font-semibold shadow-xs'
-                                  : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                              className={`py-2 px-1 rounded-lg text-center border transition-all touch-manipulation active:scale-95 ${
+                                isSelected ? style.active : style.idle
                               }`}
                             >
                               <div className="text-sm font-bold leading-none">{opt.value}</div>
-                              <div className={`text-[10px] mt-1 truncate ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                              <div className={`text-[10px] mt-1 truncate ${isSelected ? 'text-white font-medium' : 'text-slate-500'}`}>
                                 {labelText}
                               </div>
                             </button>
@@ -1160,9 +1198,9 @@ export const GuidanceHubPage: React.FC = () => {
           )}
 
           {/* 9 Subjects Input Form */}
-          <div className="bg-white rounded-lg p-5 sm:p-6 border border-slate-200 shadow-sm space-y-5">
+          <div className="bg-white rounded-lg p-4 sm:p-6 border border-slate-200 shadow-sm space-y-5">
             <div className="border-b border-slate-200 pb-3 space-y-0.5">
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">
                 Bảng Điểm Trung Bình Các Môn Học THPT (Thang Điểm 10)
               </h2>
               <p className="text-xs text-slate-500">
@@ -1170,33 +1208,51 @@ export const GuidanceHubPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
               {subjects.map(sub => {
                 const IconComp = sub.icon;
                 const val = grades[sub.key as keyof SemesterGrades];
+                const isNaturalScience = ['math', 'physics', 'chemistry', 'biology', 'informatics'].includes(sub.key);
+                
                 return (
                   <div
                     key={sub.key}
-                    className="p-3 rounded-md border border-slate-200 bg-slate-50/50 flex items-center justify-between"
+                    className={`p-3 rounded-lg border transition-colors flex items-center justify-between ${
+                      val > 0
+                        ? isNaturalScience
+                          ? 'border-sky-200 bg-sky-50/30'
+                          : 'border-amber-200 bg-amber-50/30'
+                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                    }`}
                   >
-                    <div className="flex items-center space-x-2.5">
-                      <div className="w-7 h-7 rounded bg-white border border-slate-200 flex items-center justify-center text-slate-600">
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${
+                        isNaturalScience
+                          ? 'bg-sky-50 border-sky-200 text-sky-700'
+                          : 'bg-amber-50 border-amber-200 text-amber-700'
+                      }`}>
                         <IconComp className="w-4 h-4" />
                       </div>
-                      <span className="text-xs font-medium text-slate-800">{sub.label}</span>
+                      <div className="truncate">
+                        <span className="text-xs font-semibold text-slate-800">{sub.label}</span>
+                        <div className="text-[10px] text-slate-400 font-medium">
+                          {isNaturalScience ? 'KHTN' : 'KHXH & Ngôn ngữ'}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-1 shrink-0">
                       <input
                         type="number"
+                        inputMode="decimal"
                         min="0"
                         max="10"
                         step="0.1"
                         value={val > 0 ? val : ''}
                         placeholder="0.0"
                         onChange={e => handleGradeChange(sub.key as keyof SemesterGrades, e.target.value)}
-                        className="w-14 text-center font-mono font-semibold text-xs bg-white border border-slate-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                        className="w-16 h-9 text-center font-mono font-bold text-sm bg-white border border-slate-300 rounded-md px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow"
                       />
-                      <span className="text-[11px] text-slate-400">/10</span>
+                      <span className="text-[11px] text-slate-400 font-medium">/10</span>
                     </div>
                   </div>
                 );
@@ -1204,27 +1260,50 @@ export const GuidanceHubPage: React.FC = () => {
             </div>
 
             {/* Calculated Admission Blocks Table */}
-            <div className="pt-2 space-y-2">
-              <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                Điểm các khối thi đại học chuẩn hóa Z-Score:
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+            <div className="pt-2 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Điểm các khối thi đại học chuẩn hóa Z-Score:
+                </h3>
+                <span className="text-[11px] text-slate-500 hidden sm:inline">Phân vị năng lực toàn quốc</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3">
                 {blocks.map(b => {
                   const z = (b.score - b.mu) / b.sigma;
                   const pct = Math.round(normalCDF(z) * 100);
 
+                  const blockStyles: Record<string, { badge: string; border: string; bg: string; bar: string }> = {
+                    A00: { badge: 'bg-sky-600 text-white', border: 'border-sky-200', bg: 'bg-sky-50/40', bar: 'bg-sky-500' },
+                    A01: { badge: 'bg-indigo-600 text-white', border: 'border-indigo-200', bg: 'bg-indigo-50/40', bar: 'bg-indigo-500' },
+                    B00: { badge: 'bg-emerald-600 text-white', border: 'border-emerald-200', bg: 'bg-emerald-50/40', bar: 'bg-emerald-500' },
+                    C00: { badge: 'bg-rose-600 text-white', border: 'border-rose-200', bg: 'bg-rose-50/40', bar: 'bg-rose-500' },
+                    D01: { badge: 'bg-amber-600 text-white', border: 'border-amber-200', bg: 'bg-amber-50/40', bar: 'bg-amber-500' },
+                  };
+                  const bStyle = blockStyles[b.code] || { badge: 'bg-blue-600 text-white', border: 'border-blue-200', bg: 'bg-blue-50/40', bar: 'bg-blue-500' };
+
                   return (
-                    <div key={b.code} className="p-3 rounded-md bg-white border border-slate-200 space-y-1">
+                    <div key={b.code} className={`p-3 rounded-lg border space-y-2 transition-all ${bStyle.border} ${bStyle.bg}`}>
                       <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                        <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded shadow-xs ${bStyle.badge}`}>
                           {b.code}
                         </span>
-                        <span className="text-[10px] text-slate-500 font-mono">
+                        <span className="text-[10px] text-slate-500 font-mono font-semibold">
                           Z: {z > 0 ? `+${z.toFixed(2)}` : z.toFixed(2)}
                         </span>
                       </div>
-                      <div className="text-lg font-bold text-slate-900">{b.score.toFixed(2)}</div>
-                      <div className="text-[11px] text-slate-500">Phân vị: <strong className="text-slate-800">{pct}%</strong></div>
+                      <div>
+                        <div className="text-xl font-extrabold text-slate-900 leading-none">{b.score.toFixed(2)}</div>
+                        <div className="text-[11px] text-slate-500 mt-1 flex items-center justify-between">
+                          <span>Phân vị:</span>
+                          <strong className="text-slate-800">{pct}%</strong>
+                        </div>
+                      </div>
+                      <div className="w-full bg-slate-200/80 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${bStyle.bar}`}
+                          style={{ width: `${Math.min(100, Math.max(5, pct))}%` }}
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -1669,7 +1748,12 @@ export const GuidanceHubPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {broadFields.map((field, idx) => {
                     const isSelected = selectedField?.field_id === field.field_id;
-                    const rankLabels = ['Hạng 1', 'Hạng 2', 'Hạng 3'];
+                    const rankStyles = [
+                      { badge: 'bg-amber-500 text-white shadow-xs', border: 'border-amber-300', bg: 'bg-amber-50/40', label: 'Quán Quân (Top 1)' },
+                      { badge: 'bg-slate-600 text-white shadow-xs', border: 'border-slate-300', bg: 'bg-slate-50/50', label: 'Á Quân (Top 2)' },
+                      { badge: 'bg-amber-800 text-white shadow-xs', border: 'border-amber-200', bg: 'bg-orange-50/30', label: 'Quý Quân (Top 3)' },
+                    ];
+                    const rStyle = rankStyles[idx] || { badge: 'bg-slate-900 text-white', border: 'border-slate-200', bg: 'bg-white', label: `Hạng ${idx + 1}` };
 
                     return (
                       <div
@@ -1680,22 +1764,22 @@ export const GuidanceHubPage: React.FC = () => {
                             setSelectedMajor(field.majors[0]);
                           }
                         }}
-                        className={`p-4 rounded-lg border cursor-pointer transition-colors relative space-y-2.5 ${
+                        className={`p-4 rounded-xl border cursor-pointer transition-all relative space-y-2.5 touch-manipulation ${
                           isSelected
-                            ? 'bg-blue-50/50 border-blue-600 shadow-xs'
-                            : 'bg-white hover:bg-slate-50 border-slate-200'
+                            ? 'bg-blue-50/60 border-blue-600 ring-2 ring-blue-200 shadow-sm'
+                            : `hover:bg-slate-50 ${rStyle.border} ${rStyle.bg}`
                         }`}
                       >
                         <div className="flex items-start justify-between">
-                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-slate-900 text-white">
-                            {rankLabels[idx] || `Hạng ${idx + 1}`}
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${rStyle.badge}`}>
+                            {rStyle.label}
                           </span>
 
                           <div className="text-right">
-                            <span className="text-xl font-bold text-slate-900 leading-none">
+                            <span className="text-2xl font-black text-slate-900 leading-none">
                               {field.field_score}%
                             </span>
-                            <div className="text-[10px] text-slate-500 font-medium">Tương thích</div>
+                            <div className="text-[10px] text-slate-500 font-semibold mt-0.5">Độ tương thích</div>
                           </div>
                         </div>
 
@@ -1705,8 +1789,8 @@ export const GuidanceHubPage: React.FC = () => {
                           </h4>
                         </div>
 
-                        <div className="p-2 rounded bg-white border border-slate-200 text-xs text-slate-600 space-y-0.5">
-                          <div className="text-blue-700 font-medium text-[11px]">
+                        <div className="p-2.5 rounded-lg bg-white/80 border border-slate-200/80 text-xs text-slate-600 space-y-0.5">
+                          <div className="text-blue-700 font-semibold text-[11px]">
                             {field.matching_traits}
                           </div>
                           <div className="text-[11px] text-slate-500">
@@ -1715,10 +1799,10 @@ export const GuidanceHubPage: React.FC = () => {
                         </div>
 
                         <div className="pt-1 flex items-center justify-between text-xs">
-                          <span className={isSelected ? 'text-blue-700 font-semibold' : 'text-slate-400'}>
+                          <span className={isSelected ? 'text-blue-700 font-bold' : 'text-slate-400 font-medium'}>
                             {isSelected ? 'Đang chọn lĩnh vực này' : 'Bấm để xem ngành cụ thể'}
                           </span>
-                          <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-blue-700' : 'text-slate-300'}`} />
+                          <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-blue-700 translate-x-0.5' : 'text-slate-300'} transition-transform`} />
                         </div>
                       </div>
                     );
@@ -1747,10 +1831,15 @@ export const GuidanceHubPage: React.FC = () => {
                         return (
                           <div
                             key={rec.major_code}
-                            onClick={() => setSelectedMajor(rec)}
-                            className={`p-3.5 rounded-lg border cursor-pointer transition-colors space-y-2.5 ${
+                            onClick={() => {
+                              setSelectedMajor(rec);
+                              if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                document.getElementById('major-detail-view')?.scrollIntoView({ behavior: 'smooth' });
+                              }
+                            }}
+                            className={`p-3.5 rounded-lg border cursor-pointer transition-colors space-y-2.5 touch-manipulation ${
                               isSelected
-                                ? 'bg-blue-50/50 border-blue-600 shadow-xs'
+                                ? 'bg-blue-50/50 border-blue-600 shadow-xs ring-1 ring-blue-300'
                                 : 'bg-white hover:bg-slate-50 border-slate-200'
                             }`}
                           >
@@ -1783,8 +1872,6 @@ export const GuidanceHubPage: React.FC = () => {
                               <div>Học bạ: <strong className="text-slate-900">{rec.academic_score}%</strong></div>
                               <div>Nhận thức: <strong className="text-slate-900">{rec.preference_score}%</strong></div>
                             </div>
-
-
 
                             {/* Skill Gap */}
                             {rec.missing_skills.length > 0 && (
@@ -1846,7 +1933,7 @@ export const GuidanceHubPage: React.FC = () => {
                     </div>
 
                     {/* Right Column (7 cols): Selected Major XAI Details */}
-                    <div className="lg:col-span-7">
+                    <div id="major-detail-view" className="lg:col-span-7 scroll-mt-20">
                       {selectedMajor ? (
                         <div className="bg-white rounded-lg p-5 border border-slate-200 shadow-sm space-y-4 sticky top-20">
                           <div className="flex items-start justify-between border-b border-slate-200 pb-3">
