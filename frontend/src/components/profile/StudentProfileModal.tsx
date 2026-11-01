@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   User,
@@ -109,17 +110,17 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-modal border border-slate-200 w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden my-auto animate-in fade-in duration-150">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+      <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="shrink-0 p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div className="shrink-0 p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-md bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-xs shrink-0">
               {fullName ? fullName.charAt(0).toUpperCase() : 'H'}
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900">
                 Hồ Sơ Học Sinh & Quyền Riêng Tư
               </h2>
               <p className="text-xs text-slate-500">
@@ -130,7 +131,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors shrink-0"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 transition-colors shrink-0 cursor-pointer"
             title="Đóng modal"
           >
             <X className="w-5 h-5" />
@@ -138,13 +139,13 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="shrink-0 flex border-b border-slate-200 px-5 bg-white">
+        <div className="shrink-0 flex border-b border-slate-200 px-4 sm:px-6 bg-white">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`py-3 px-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition-colors ${
+            className={`py-3 px-3 text-xs sm:text-sm font-bold border-b-2 flex items-center space-x-2 transition-colors cursor-pointer ${
               activeTab === 'profile'
                 ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <User className="w-4 h-4" />
@@ -153,10 +154,10 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
           <button
             onClick={() => setActiveTab('privacy')}
-            className={`py-3 px-3 text-xs font-semibold border-b-2 flex items-center space-x-2 transition-colors ${
+            className={`py-3 px-3 text-xs sm:text-sm font-bold border-b-2 flex items-center space-x-2 transition-colors cursor-pointer ${
               activeTab === 'privacy'
                 ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
@@ -165,9 +166,9 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-5 overflow-y-auto flex-1 min-h-0 space-y-4">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
           {savedNotice && (
-            <div className="p-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center space-x-2">
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center space-x-2 shadow-2xs">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>{savedNotice}</span>
             </div>
@@ -176,10 +177,10 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           {/* TAB 1: PROFILE FORM */}
           {activeTab === 'profile' && (
             <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                 {/* Full name */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700 flex items-center space-x-1.5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
                     <User className="w-3.5 h-3.5 text-slate-400" />
                     <span>Họ và Tên</span>
                   </label>
@@ -189,13 +190,13 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     onChange={(e) => setFullName(e.target.value)}
                     required
                     placeholder="Nguyễn Văn A"
-                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-colors"
                   />
                 </div>
 
                 {/* Email (Readonly) */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700 flex items-center space-x-1.5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
                     <Mail className="w-3.5 h-3.5 text-slate-400" />
                     <span>Email Tài Khoản</span>
                   </label>
@@ -203,13 +204,13 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     type="email"
                     value={user?.email || ''}
                     disabled
-                    className="w-full px-3 py-2 rounded-md border border-slate-200 text-xs bg-slate-50 text-slate-500 cursor-not-allowed"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm bg-slate-50 text-slate-500 cursor-not-allowed font-mono"
                   />
                 </div>
 
                 {/* Phone */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700 flex items-center space-x-1.5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
                     <Phone className="w-3.5 h-3.5 text-slate-400" />
                     <span>Số Điện Thoại Liên Hệ</span>
                   </label>
@@ -218,14 +219,14 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="0912 345 678"
-                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-colors"
                   />
                 </div>
 
                 {/* Date of Birth & Gender */}
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700 flex items-center space-x-1">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1">
                       <Calendar className="w-3.5 h-3.5 text-slate-400" />
                       <span>Ngày Sinh</span>
                     </label>
@@ -233,15 +234,15 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                       type="date"
                       value={dob}
                       onChange={(e) => setDob(e.target.value)}
-                      className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-colors"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">Giới Tính</label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700">Giới Tính</label>
                     <select
                       value={gender}
                       onChange={(e) => setGender(e.target.value)}
-                      className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 bg-white"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-colors"
                     >
                       <option value="Nam">Nam</option>
                       <option value="Nữ">Nữ</option>
@@ -251,8 +252,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 </div>
 
                 {/* High School Name */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700 flex items-center space-x-1.5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
                     <Building className="w-3.5 h-3.5 text-slate-400" />
                     <span>Trường THPT Đang Học</span>
                   </label>
@@ -261,13 +262,13 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     value={schoolName}
                     onChange={(e) => setSchoolName(e.target.value)}
                     placeholder="THPT Chuyên Lê Hồng Phong"
-                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-colors"
                   />
                 </div>
 
                 {/* City / Province */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700 flex items-center space-x-1.5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
                     <MapPin className="w-3.5 h-3.5 text-slate-400" />
                     <span>Tỉnh / Thành Phố</span>
                   </label>
@@ -276,20 +277,20 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                     value={cityProvince}
                     onChange={(e) => setCityProvince(e.target.value)}
                     placeholder="Hà Nội, TP.HCM, Đà Nẵng..."
-                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-colors"
                   />
                 </div>
 
                 {/* Grade Level */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700 flex items-center space-x-1.5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
                     <GraduationCap className="w-3.5 h-3.5 text-slate-400" />
                     <span>Khối Lớp</span>
                   </label>
                   <select
                     value={gradeLevel}
                     onChange={(e) => setGradeLevel(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 bg-white"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-colors"
                   >
                     <option value="Lớp 10">Lớp 10 (Chuẩn bị chọn tổ hợp môn)</option>
                     <option value="Lớp 11">Lớp 11 (Tập trung năng lực học thuật)</option>
@@ -299,12 +300,12 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                 </div>
 
                 {/* Target Admission Block */}
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700">Tổ Hợp Thi Mục Tiêu</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">Tổ Hợp Thi Mục Tiêu</label>
                   <select
                     value={targetBlock}
                     onChange={(e) => setTargetBlock(e.target.value)}
-                    className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 bg-white"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 bg-white transition-colors"
                   >
                     <option value="A00 (Toán, Lý, Hóa)">A00 (Toán, Lý, Hóa)</option>
                     <option value="A01 (Toán, Lý, Tiếng Anh)">A01 (Toán, Lý, Tiếng Anh)</option>
@@ -317,8 +318,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               </div>
 
               {/* Career Goal */}
-              <div className="space-y-1 pt-1">
-                <label className="text-xs font-medium text-slate-700 flex items-center space-x-1.5">
+              <div className="space-y-1.5 pt-1">
+                <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-blue-600" />
                   <span>Nguyện vọng nghề nghiệp quan tâm</span>
                 </label>
@@ -327,7 +328,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   value={careerGoal}
                   onChange={(e) => setCareerGoal(e.target.value)}
                   placeholder="Ví dụ: Kỹ sư Phần mềm, Bác sĩ Đa khoa, Chuyên viên Phân tích Dữ liệu..."
-                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-colors"
                 />
               </div>
 
@@ -340,7 +341,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-sm flex items-center space-x-1.5 transition-colors"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>Lưu thay đổi</span>
@@ -352,7 +353,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           {/* TAB 2: PRIVACY & ZERO PII TO AI */}
           {activeTab === 'privacy' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-md bg-slate-50 border border-slate-200 space-y-2">
+              <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-100 space-y-2">
                 <div className="flex items-center space-x-2">
                   <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0" />
                   <h3 className="text-sm font-bold text-slate-900">
@@ -366,9 +367,9 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               </div>
 
               {/* Comparison */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 rounded-md bg-white border border-slate-200 space-y-2">
-                  <div className="flex items-center space-x-2 text-slate-900 font-semibold text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+                <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-2 shadow-2xs">
+                  <div className="flex items-center space-x-2 text-slate-900 font-bold text-xs">
                     <EyeOff className="w-4 h-4 text-slate-500" />
                     <span>Dữ liệu Định danh (Bảo vệ tuyệt đối)</span>
                   </div>
@@ -383,8 +384,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   </p>
                 </div>
 
-                <div className="p-4 rounded-md bg-white border border-slate-200 space-y-2">
-                  <div className="flex items-center space-x-2 text-slate-900 font-semibold text-xs">
+                <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-2 shadow-2xs">
+                  <div className="flex items-center space-x-2 text-slate-900 font-bold text-xs">
                     <Sparkles className="w-4 h-4 text-blue-600" />
                     <span>Dữ liệu Xử lý Thuật toán (Ẩn danh 100%)</span>
                   </div>
@@ -401,17 +402,17 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               </div>
 
               {/* Data Export Action */}
-              <div className="pt-4 flex items-center justify-between border-t border-slate-200">
+              <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={handleExportData}
-                  className="px-3.5 py-2 rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-medium text-xs flex items-center space-x-1.5 transition-colors shadow-xs"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-2xs cursor-pointer"
                 >
                   <Download className="w-4 h-4 text-slate-500" />
                   <span>Xuất bản sao dữ liệu (JSON)</span>
                 </button>
 
-                <span className="text-[11px] text-slate-500">
+                <span className="text-[11px] text-slate-500 text-center sm:text-right">
                   Quyền tự quyết dữ liệu theo Điều 9 Luật 91/2025/QH15
                 </span>
               </div>
@@ -419,6 +420,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
+export default StudentProfileModal;

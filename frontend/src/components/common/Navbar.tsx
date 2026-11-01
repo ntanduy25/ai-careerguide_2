@@ -32,8 +32,9 @@ export const Navbar: React.FC = () => {
       icon: BookOpen,
       public: true,
       color: 'text-blue-600',
-      activeBg: 'bg-blue-50 text-blue-700',
-      iconBg: 'bg-blue-100 text-blue-600',
+      activeBg: 'bg-blue-50/90 text-blue-800 border-blue-200/90',
+      iconActiveBg: 'bg-blue-600 text-white',
+      iconIdleBg: 'bg-blue-50 text-blue-600',
     },
     {
       name: 'Định hướng & Đề xuất',
@@ -41,8 +42,9 @@ export const Navbar: React.FC = () => {
       icon: BrainCircuit,
       public: false,
       color: 'text-indigo-600',
-      activeBg: 'bg-indigo-50 text-indigo-700',
-      iconBg: 'bg-indigo-100 text-indigo-600',
+      activeBg: 'bg-indigo-50/90 text-indigo-800 border-indigo-200/90',
+      iconActiveBg: 'bg-indigo-600 text-white',
+      iconIdleBg: 'bg-indigo-50 text-indigo-600',
     },
     {
       name: 'Danh mục 108 ngành',
@@ -50,8 +52,9 @@ export const Navbar: React.FC = () => {
       icon: Compass,
       public: true,
       color: 'text-teal-600',
-      activeBg: 'bg-teal-50 text-teal-700',
-      iconBg: 'bg-teal-100 text-teal-600',
+      activeBg: 'bg-teal-50/90 text-teal-800 border-teal-200/90',
+      iconActiveBg: 'bg-teal-600 text-white',
+      iconIdleBg: 'bg-teal-50 text-teal-600',
     },
     {
       name: 'Lộ trình phát triển',
@@ -59,8 +62,9 @@ export const Navbar: React.FC = () => {
       icon: MapPin,
       public: false,
       color: 'text-amber-600',
-      activeBg: 'bg-amber-50 text-amber-700',
-      iconBg: 'bg-amber-100 text-amber-600',
+      activeBg: 'bg-amber-50/90 text-amber-800 border-amber-200/90',
+      iconActiveBg: 'bg-amber-600 text-white',
+      iconIdleBg: 'bg-amber-50 text-amber-600',
     },
   ];
 
@@ -81,7 +85,7 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14 sm:h-16">
           {/* Logo & Product Title */}
@@ -93,14 +97,14 @@ export const Navbar: React.FC = () => {
               <span className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
                 AI CareerGuide
               </span>
-              <span className="hidden sm:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+              <span className="hidden sm:inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                 THPT
               </span>
             </div>
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-1">
+          <nav className="hidden md:flex items-center space-x-1.5">
             {navLinks.map((link) => {
               const Icon = link.icon;
               const active = isActive(link.path);
@@ -113,13 +117,17 @@ export const Navbar: React.FC = () => {
                 <Link
                   key={link.path}
                   to={targetPath}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
                     active
                       ? `${link.activeBg} font-bold shadow-2xs`
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                      : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${active ? link.color : 'text-slate-400'}`} />
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                    active ? link.iconActiveBg : link.iconIdleBg
+                  }`}>
+                    <Icon className="w-3.5 h-3.5" />
+                  </div>
                   <span>{link.name}</span>
                 </Link>
               );
@@ -128,7 +136,7 @@ export const Navbar: React.FC = () => {
             {isAdmin && (
               <Link
                 to="/admin/dashboard"
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-sm font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors ml-2"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors ml-2"
               >
                 <Shield className="w-4 h-4 text-purple-600" />
                 <span>Quản trị HITL</span>
@@ -251,8 +259,9 @@ export const Navbar: React.FC = () => {
                   setProfileModalTab('profile');
                   setProfileModalOpen(true);
                 }}
-                className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs"
-                aria-label="Xem hồ sơ"
+                className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs ring-2 ring-blue-500/20 shadow-xs cursor-pointer active:scale-95 transition-transform"
+                aria-label="Xem hồ sơ học sinh"
+                title="Hồ sơ học sinh"
               >
                 {user?.full_name?.charAt(0) || user?.email.charAt(0).toUpperCase()}
               </button>
@@ -261,7 +270,7 @@ export const Navbar: React.FC = () => {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 focus:outline-none cursor-pointer"
+              className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 focus:outline-none cursor-pointer active:scale-95 transition-transform"
               aria-label="Menu điều hướng"
             >
               {mobileMenuOpen ? <X className="w-6 h-6 text-slate-800" /> : <Menu className="w-6 h-6" />}
@@ -272,7 +281,7 @@ export const Navbar: React.FC = () => {
 
       {/* Mobile Drawer Overlay */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-slate-200 bg-white/98 backdrop-blur-lg px-4 pt-3 pb-6 space-y-2 shadow-xl animate-in slide-in-from-top-2 duration-150">
+        <div className="md:hidden border-t border-slate-200 bg-white/98 backdrop-blur-lg px-4 pt-3 pb-6 space-y-2.5 shadow-xl animate-in slide-in-from-top-2 duration-150">
           <div className="grid grid-cols-1 gap-1.5">
             {navLinks.map((link) => {
               const Icon = link.icon;
@@ -287,13 +296,13 @@ export const Navbar: React.FC = () => {
                   key={link.path}
                   to={targetPath}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center space-x-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
                     active
-                      ? `${link.activeBg} font-bold shadow-2xs border border-slate-200/80`
-                      : 'text-slate-700 hover:bg-slate-50 active:bg-slate-100'
+                      ? `${link.activeBg} font-bold shadow-xs`
+                      : 'border-transparent text-slate-700 hover:bg-slate-50 active:bg-slate-100'
                   }`}
                 >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? link.iconBg : 'bg-slate-100 text-slate-500'}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? link.iconActiveBg : link.iconIdleBg}`}>
                     <Icon className="w-4 h-4" />
                   </div>
                   <span>{link.name}</span>
