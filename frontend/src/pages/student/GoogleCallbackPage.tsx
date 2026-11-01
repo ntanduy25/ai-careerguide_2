@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 export const GoogleCallbackPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { handleGoogleCallback } = useAuth();
+  const { handleGoogleCallback, googleLogin } = useAuth();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
   const isCalledRef = useRef(false);
@@ -15,34 +15,76 @@ export const GoogleCallbackPage: React.FC = () => {
     if (isCalledRef.current) return;
     isCalledRef.current = true;
 
-    const code = searchParams.get('code');
-    const error = searchParams.get('error');
+    // 1. Check URL fragment hash for Implicit Token response (#access_token=... or #id_token=...)
+    const hash = window.location.hash.startsWith('#')
+      ? window.location.hash.substring(1)
+      : window.location.hash;
+    const hashParams = new URLSearchParams(hash);
+
+    const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
+    const idToken = hashParams.get('id_token') || searchParams.get('id_token');
+    const code = searchParams.get('code') || hashParams.get('code');
+    const error = searchParams.get('error') || hashParams.get('error');
 
     if (error) {
       setErrorMsg(`Google từ chối đăng nhập hoặc người dùng đã hủy: ${error}`);
       return;
     }
 
-    if (!code) {
-      setErrorMsg('Không tìm thấy mã xác thực Authorization Code từ Google Callback.');
+    // Direct User-Agent flow: fetch Google UserInfo directly using access_token
+    if (accessToken) {
+      fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then(async (resp) => {
+          if (!resp.ok) {
+            throw new Error(`Google UserInfo trả về lỗi HTTP ${resp.status}`);
+          }
+          return await resp.json();
+        })
+        .then(async (profile) => {
+          const res = await googleLogin({
+            email: profile.email,
+            full_name: profile.name || profile.email?.split('@')[0],
+            avatar_url: profile.picture,
+            google_id: profile.sub,
+            credential: idToken || undefined,
+          });
+
+          setIsSuccess(true);
+          const destination = res?.user?.role === 'ADMIN' ? '/admin/dashboard' : '/guidance';
+          setTimeout(() => {
+            navigate(destination, { replace: true });
+          }, 1000);
+        })
+        .catch((err: any) => {
+          console.error('Google profile fetch/login error:', err);
+          setErrorMsg(err.message || 'Xác thực tài khoản Google thất bại. Vui lòng thử lại.');
+        });
       return;
     }
 
-    const redirectUri = `${window.location.origin}/login/callback`;
+    // Backend Authorization Code flow
+    if (code) {
+      const redirectUri = `${window.location.origin}/login/callback`;
 
-    handleGoogleCallback(code, redirectUri)
-      .then((res) => {
-        setIsSuccess(true);
-        const destination = res?.user?.role === 'ADMIN' ? '/admin/dashboard' : '/guidance';
-        setTimeout(() => {
-          navigate(destination, { replace: true });
-        }, 1200);
-      })
-      .catch((err: any) => {
-        console.error('Google OAuth callback error:', err);
-        setErrorMsg(err.message || 'Xác thực Google OAuth 2.0 thất bại. Vui lòng thử lại.');
-      });
-  }, [searchParams, handleGoogleCallback, navigate]);
+      handleGoogleCallback(code, redirectUri)
+        .then((res) => {
+          setIsSuccess(true);
+          const destination = res?.user?.role === 'ADMIN' ? '/admin/dashboard' : '/guidance';
+          setTimeout(() => {
+            navigate(destination, { replace: true });
+          }, 1000);
+        })
+        .catch((err: any) => {
+          console.error('Google OAuth callback error:', err);
+          setErrorMsg(err.message || 'Xác thực Google OAuth 2.0 thất bại. Vui lòng thử lại.');
+        });
+      return;
+    }
+
+    setErrorMsg('Không tìm thấy mã hoặc token xác thực từ Google Callback.');
+  }, [searchParams, handleGoogleCallback, googleLogin, navigate]);
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">

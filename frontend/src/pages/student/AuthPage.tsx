@@ -61,10 +61,9 @@ export const AuthPage: React.FC = () => {
     const params = new URLSearchParams({
       client_id: googleClientId,
       redirect_uri: redirectUri,
-      response_type: 'code',
+      response_type: 'token',
       scope: 'openid email profile',
       prompt: 'select_account',
-      access_type: 'offline',
     });
     window.location.href = `${oauthEndpoint}?${params.toString()}`;
   };
