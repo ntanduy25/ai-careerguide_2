@@ -552,22 +552,22 @@ export const GuidanceHubPage: React.FC = () => {
   const getLikertLabel = (val: number, defaultLabel: string) => {
     switch (val) {
       case 1:
-        return 'Rất không thích';
+        return { short: 'Rất ghét', full: 'Rất không thích' };
       case 2:
-        return 'Không thích';
+        return { short: 'Ko thích', full: 'Không thích' };
       case 3:
-        return 'Bình thường';
+        return { short: 'Bình thường', full: 'Bình thường' };
       case 4:
-        return 'Thích';
+        return { short: 'Thích', full: 'Thích' };
       case 5:
-        return 'Rất thích';
+        return { short: 'Rất thích', full: 'Rất thích' };
       default:
-        return defaultLabel;
+        return { short: defaultLabel, full: defaultLabel };
     }
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-20 space-y-6">
       {/* 1. Header & 3-Step Navigation */}
       <div className="bg-white rounded-lg p-6 border border-slate-200 shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -919,7 +919,7 @@ export const GuidanceHubPage: React.FC = () => {
                       <div className="grid grid-cols-5 gap-1.5 sm:gap-2 max-w-xl mx-auto pt-1">
                         {likertScale.map(opt => {
                           const isSelected = currentScore === opt.value;
-                          const labelText = getLikertLabel(opt.value, opt.label);
+                          const labelObj = getLikertLabel(opt.value, opt.label);
 
                           const likertStyleMap: Record<number, { active: string; idle: string }> = {
                             1: { active: 'bg-rose-600 border-rose-600 text-white shadow-sm ring-2 ring-rose-200', idle: 'bg-white hover:bg-rose-50/60 border-slate-200 hover:border-rose-300 text-slate-700' },
@@ -935,13 +935,16 @@ export const GuidanceHubPage: React.FC = () => {
                               key={opt.value}
                               type="button"
                               onClick={() => setRiasecAnswer(q.code, opt.value)}
-                              className={`py-2 px-1 rounded-lg text-center border transition-all touch-manipulation active:scale-95 ${
+                              className={`py-2 px-0.5 sm:px-1 rounded-lg text-center border transition-all touch-manipulation active:scale-95 ${
                                 isSelected ? style.active : style.idle
                               }`}
                             >
-                              <div className="text-sm font-bold leading-none">{opt.value}</div>
-                              <div className={`text-[10px] mt-1 truncate ${isSelected ? 'text-white font-medium' : 'text-slate-500'}`}>
-                                {labelText}
+                              <div className="text-xs sm:text-sm font-bold leading-none">{opt.value}</div>
+                              <div className={`mt-1 text-[9px] sm:text-[11px] leading-tight min-h-[22px] flex items-center justify-center font-medium ${
+                                isSelected ? 'text-white' : 'text-slate-600'
+                              }`}>
+                                <span className="sm:hidden">{labelObj.short}</span>
+                                <span className="hidden sm:inline">{labelObj.full}</span>
                               </div>
                             </button>
                           );
