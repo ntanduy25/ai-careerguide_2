@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     ARGON2_SALT_LEN: int = 16
 
     # Google OAuth 2.0 Credentials
-    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_ID: str = "1095956825384-f8n2bj0ott0u1sokbegksf7n32tlpn51.apps.googleusercontent.com"
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:5173/login/callback"
 
