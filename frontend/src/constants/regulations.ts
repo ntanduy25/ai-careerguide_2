@@ -8,8 +8,8 @@ import { useState, useEffect } from 'react';
  * and dynamically updates all occurrences across the frontend.
  */
 
-export const DEFAULT_MOET_CIRCULAR = 'Thông tư 09/2022/TT-BGDĐT';
-export const DEFAULT_MOET_SHORT = 'TT 09/2022';
+export const DEFAULT_MOET_CIRCULAR = 'Thông tư 74/2026/TT-BGDĐT';
+export const DEFAULT_MOET_SHORT = 'TT 74/2026';
 const STORAGE_KEY = 'ai_careerguide_active_circular';
 
 export const getActiveCircular = (): string => {

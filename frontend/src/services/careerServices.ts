@@ -1664,12 +1664,12 @@ export const taxonomyService = {
       }
     }
     const currentCircular = localStorage.getItem('careerguide_active_circular') || '';
-    if (currentCircular.includes('74')) {
-      this._cachedMajors = MOET_TT74_MAJORS;
-      return MOET_TT74_MAJORS;
+    if (currentCircular.includes('09')) {
+      this._cachedMajors = MOET_108_MAJORS;
+      return MOET_108_MAJORS;
     }
-    this._cachedMajors = MOET_108_MAJORS;
-    return MOET_108_MAJORS;
+    this._cachedMajors = MOET_TT74_MAJORS;
+    return MOET_TT74_MAJORS;
   },
 
   getAllOfficialMoetMajors(): MajorItem[] {
@@ -1747,7 +1747,9 @@ export const taxonomyService = {
     majors: MajorItem[];
   }> {
     const fileName = file?.name?.toLowerCase() || '';
-    const isTT74 = fileName.includes('74') || fileName.includes('tt74') || fileName.includes('2026');
+    const currentCirc = localStorage.getItem('careerguide_active_circular') || '74';
+    const isTT09 = fileName.includes('09') || fileName.includes('tt09') || fileName.includes('2022');
+    const isTT74 = !isTT09 && (fileName.includes('74') || fileName.includes('tt74') || fileName.includes('2026') || currentCirc.includes('74') || !fileName);
 
     if (file) {
       try {

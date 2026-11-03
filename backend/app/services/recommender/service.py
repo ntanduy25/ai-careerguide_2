@@ -106,12 +106,39 @@ async def calculate_3pillar_recommendations(
             prereq_map.setdefault(target_c, []).append(source_c)
 
     # 6. Retrieve all Active Majors with Admitted Subject Blocks and Required Skills
-    majors_query = select(Major).where(Major.is_active == True).options(
-        selectinload(Major.subject_blocks).selectinload(MajorSubjectBlock.subject_block),
-        selectinload(Major.major_skills).selectinload(MajorSkill.skill)
-    )
-    majors_res = await db.execute(majors_query)
-    majors: List[Major] = list(majors_res.scalars().all())
+    try:
+        majors_query = select(Major).where(Major.is_active == True).options(
+            selectinload(Major.subject_blocks).selectinload(MajorSubjectBlock.subject_block),
+            selectinload(Major.major_skills).selectinload(MajorSkill.skill)
+        )
+        majors_res = await db.execute(majors_query)
+        majors = list(majors_res.scalars().all())
+    except Exception as db_err:
+        logger.warning("Database query failed in recommender, falling back to seed taxonomy: %s", db_err)
+        majors = []
+
+    if not majors:
+        from app.services.taxonomy.service import load_seed_majors
+        seed_data = load_seed_majors()
+
+        class MajorSeedAdapter:
+            def __init__(self, d: dict, mock_id: int):
+                self.id = d.get("id") or mock_id
+                self.major_code = d.get("major_code", "")
+                self.name = d.get("name", "")
+                self.category = d.get("category", "")
+                self.riasec_vector = d.get("riasec") or d.get("riasec_vector") or {}
+                self.cognitive_attributes = d.get("cognitive") or d.get("cognitive_attributes") or {}
+                self.industry_outlook = d.get("outlook") or d.get("industry_outlook") or ""
+                self.is_active = True
+                raw_blocks = d.get("blocks", [])
+                self.subject_blocks = [
+                    type("MSB", (), {"subject_block": type("SB", (), {"block_code": b})()})()
+                    for b in raw_blocks
+                ]
+                self.major_skills = []
+
+        majors = [MajorSeedAdapter(m, idx) for idx, m in enumerate(seed_data, start=1)]
 
     scored_items: List[MajorRecommendationItem] = []
 
