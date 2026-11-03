@@ -107,6 +107,15 @@ export interface MajorRecommendation {
   missing_skills: CompetencyGapItem[];
   admitted_blocks: string[];
   industry_outlook?: string;
+  // Solution B: Dynamic Academic Clustering & Admission Feasibility
+  feasibility_tier?: 'TARGET' | 'REACH' | 'ALTERNATIVE';
+  feasibility_label?: string;
+  benchmark_cutoff?: number;
+  score_gap?: number;
+  best_block_total?: number;
+  admission_advice?: string;
+  academic_tier?: 'HIGH_COMPETITION' | 'MEDIUM_COMPETITION' | 'STANDARD_COMPETITION';
+  academic_tier_label?: string;
 }
 
 export interface BroadFieldRecommendation {

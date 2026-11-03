@@ -413,6 +413,88 @@ function calculateCosineSimilarity(
   return dot / (mag1 * mag2);
 }
 
+// ==========================================
+// SOLUTION B: DYNAMIC ACADEMIC BENCHMARK CLASSIFIER
+// ==========================================
+export interface MajorBenchmarkInfo {
+  tier: 'HIGH_COMPETITION' | 'MEDIUM_COMPETITION' | 'STANDARD_COMPETITION';
+  tierLabel: string;
+  benchmarkCutoff: number;
+  minRecommended: number;
+  description: string;
+}
+
+export function classifyMajorAcademicBenchmark(
+  majorCode: string,
+  majorName: string,
+  category: string = ''
+): MajorBenchmarkInfo {
+  const nameLower = (majorName || '').toLowerCase();
+  const catLower = (category || '').toLowerCase();
+
+  // 1. Extreme / High Competition (Điểm chuẩn thường 24.5 - 28.5)
+  const highKeywords = [
+    'y khoa', 'y đa khoa', 'răng hàm mặt', 'răng - hàm - mặt', 'dược học',
+    'y học cổ truyền', 'khoa học máy tính', 'trí tuệ nhân tạo', 'khoa học dữ liệu',
+    'vi mạch', 'bán dẫn', 'kinh tế quốc tế', 'kinh doanh quốc tế', 'luật kinh tế',
+    'logistics',
+  ];
+  if (highKeywords.some((k) => nameLower.includes(k))) {
+    return {
+      tier: 'HIGH_COMPETITION',
+      tierLabel: 'Cạnh tranh cực cao (≥ 24.5đ)',
+      benchmarkCutoff: 25.5,
+      minRecommended: 23.5,
+      description: 'Nhóm ngành tinh hoa với điểm chuẩn đại học thuộc top đầu cả nước.',
+    };
+  }
+
+  // 2. Medium / Solid Competition (Điểm chuẩn thường 19.5 - 23.5)
+  const mediumKeywords = [
+    'kỹ thuật xét nghiệm', 'kỹ thuật hình ảnh', 'phục hồi chức năng', 'điều dưỡng',
+    'công nghệ thông tin', 'an toàn thông tin', 'kỹ thuật phần mềm', 'hệ thống thông tin',
+    'tài chính', 'ngân hàng', 'kế toán', 'kiểm toán', 'marketing', 'truyền thông',
+    'thương mại điện tử', 'luật', 'sư phạm', 'ngôn ngữ anh', 'ngôn ngữ trung',
+  ];
+  if (mediumKeywords.some((k) => nameLower.includes(k))) {
+    return {
+      tier: 'MEDIUM_COMPETITION',
+      tierLabel: 'Cạnh tranh khá (≥ 19.5đ)',
+      benchmarkCutoff: 21.0,
+      minRecommended: 19.0,
+      description: 'Nhóm ngành có tính cạnh tranh khá tại các trường đại học công lập lớn.',
+    };
+  }
+
+  // 3. Standard / Accessible Competition (Điểm chuẩn thường 15.0 - 18.5)
+  const standardKeywords = [
+    'công nghệ sinh học', 'sinh học', 'y tế công cộng', 'dinh dưỡng', 'thú y',
+    'chăn nuôi', 'nông nghiệp', 'cây trồng', 'lâm nghiệp', 'thủy sản', 'môi trường',
+    'đất đai', 'thực phẩm', 'vật liệu', 'dệt may', 'văn phòng', 'công tác xã hội',
+    'xã hội học', 'triết học', 'lịch sử', 'địa lý', 'thống kê', 'phát triển', 'quản lý nhà nước',
+  ];
+  if (
+    standardKeywords.some((k) => nameLower.includes(k)) ||
+    standardKeywords.some((k) => catLower.includes(k))
+  ) {
+    return {
+      tier: 'STANDARD_COMPETITION',
+      tierLabel: 'Vừa sức / Tiêu chuẩn (≥ 15.0đ)',
+      benchmarkCutoff: 16.5,
+      minRecommended: 15.0,
+      description: 'Nhóm ngành đào tạo ứng dụng thực tế, điểm sàn mở rộng từ 15.0 - 18.5đ.',
+    };
+  }
+
+  return {
+    tier: 'STANDARD_COMPETITION',
+    tierLabel: 'Phổ thông (≥ 16.0đ)',
+    benchmarkCutoff: 18.0,
+    minRecommended: 15.5,
+    description: 'Nhóm ngành có phổ điểm tuyển sinh đa dạng theo phân khúc trường.',
+  };
+}
+
 export const recommendationService = {
   async getHierarchicalRecommendations(
     userVector?: RIASECVector | null,
@@ -586,27 +668,85 @@ export const recommendationService = {
       ROLE_QUALITY_CONTROLLER: ['34', '54', '62', '64', '72', '84', '85'],
     };
 
+    // Detect if student entered subject grades
+    const hasEnteredGrades = Boolean(
+      grades && Object.values(grades).some((v: any) => typeof v === 'number' && v > 0)
+    );
+
     // Calculate score for each major
     const scored = catalog.map(m => {
       const riasecSim = calculateCosineSimilarity(userVector, m.riasec);
       const riasecScore = Math.min(100, Math.round(riasecSim * 100));
 
-      // Calculate Academic fit based on admission blocks
+      // Solution B: Benchmark evaluation & Feasibility calculation
+      const benchmark = classifyMajorAcademicBenchmark(m.major_code, m.name, m.category);
+      let bestBlock30Sum = 24.0;
+      let bestBlockCode = m.blocks[0] || 'A00';
+
+      if (hasEnteredGrades && grades) {
+        const g = grades as Record<string, any>;
+        const math = Number(g.math ?? 0);
+        const physics = Number(g.physics ?? 0);
+        const chemistry = Number(g.chemistry ?? 0);
+        const english = Number(g.english ?? 0);
+        const literature = Number(g.literature ?? 0);
+        const bio = Number(g.biology ?? 0);
+        const history = Number(g.history ?? 0);
+        const geography = Number(g.geography ?? 0);
+
+        const blockSums: Record<string, number> = {
+          A00: math + physics + chemistry,
+          A01: math + physics + english,
+          B00: math + chemistry + bio,
+          C00: literature + history + geography,
+          D01: math + literature + english,
+          D07: math + chemistry + english,
+          D08: math + bio + english,
+        };
+
+        let maxScore = -1;
+        let chosenBlock = m.blocks[0] || 'A00';
+        for (const blk of m.blocks) {
+          if (blockSums[blk] !== undefined && blockSums[blk] > maxScore) {
+            maxScore = blockSums[blk];
+            chosenBlock = blk;
+          }
+        }
+        if (maxScore > 0) {
+          bestBlock30Sum = maxScore;
+          bestBlockCode = chosenBlock;
+        } else {
+          bestBlock30Sum = Math.max(
+            blockSums.A00,
+            blockSums.B00,
+            blockSums.D01,
+            blockSums.A01,
+            (math + chemistry + bio)
+          );
+        }
+      }
+
+      const scoreGap = Number((bestBlock30Sum - benchmark.benchmarkCutoff).toFixed(1));
+      const isTarget = bestBlock30Sum >= benchmark.minRecommended - 1.0;
+      const feasibilityTier: 'TARGET' | 'REACH' = isTarget ? 'TARGET' : 'REACH';
+      const gapAbs = Math.abs(scoreGap).toFixed(1);
+      const feasibilityLabel = isTarget
+        ? 'Vừa sức / Khả thi cao'
+        : `Thử thách cao (Thiếu ~${gapAbs}đ)`;
+      const admissionAdvice = isTarget
+        ? `Điểm khối thi ${bestBlockCode} (${bestBlock30Sum.toFixed(1)}đ) nằm trong vùng điểm sàn an toàn của ngành này (~${benchmark.benchmarkCutoff}đ).`
+        : `Điểm khối thi ${bestBlockCode} (${bestBlock30Sum.toFixed(1)}đ) thấp hơn khoảng ${gapAbs} điểm so với điểm chuẩn trung bình (~${benchmark.benchmarkCutoff}đ). Cần bứt phá điểm số lớn.`;
+
+      // Calculate Academic fit based on admission blocks & feasibility penalty
       let academicScore = Math.floor(82 + riasecSim * 15);
-      if (grades && Object.values(grades).some(v => v > 0)) {
-        const math = grades.math || 8.0;
-        const physics = grades.physics || 8.0;
-        const chemistry = grades.chemistry || 7.5;
-        const english = grades.english || 8.0;
-        const literature = grades.literature || 7.5;
-        const bio = grades.biology || 7.5;
-
-        let blockTotal = (math + physics + english) / 3;
-        if (m.blocks.includes('A00')) blockTotal = Math.max(blockTotal, (math + physics + chemistry) / 3);
-        if (m.blocks.includes('D01')) blockTotal = Math.max(blockTotal, (math + literature + english) / 3);
-        if (m.blocks.includes('B00')) blockTotal = Math.max(blockTotal, (math + chemistry + bio) / 3);
-
-        academicScore = Math.min(99, Math.round((blockTotal / 10) * 100));
+      if (hasEnteredGrades) {
+        const baseAcademicScore = Math.min(99, Math.round((bestBlock30Sum / 30) * 100));
+        if (!isTarget) {
+          const deficitRatio = Math.min(1.0, Math.abs(scoreGap) / 15.0);
+          academicScore = Math.max(10, Math.round(baseAcademicScore * (1 - deficitRatio * 0.6)));
+        } else {
+          academicScore = baseAcademicScore;
+        }
       }
 
       // Calculate Cognitive Preference score (20% weight) with Circular 74 mapping
@@ -758,8 +898,10 @@ export const recommendationService = {
           },
           {
             factor_type: 'ACADEMIC',
-            factor_title: `Tổ hợp xét tuyển tối ưu: ${m.blocks.slice(0, 3).join(', ')}`,
-            factor_description: 'Năng lực học tập chuẩn hóa Z-score đạt ngưỡng an toàn cho nhóm ngành tuyển sinh.',
+            factor_title: feasibilityTier === 'REACH'
+              ? `Cảnh báo phân tầng: ${feasibilityLabel}`
+              : `Khối thi ${bestBlockCode} (${bestBlock30Sum.toFixed(1)}đ): Vừa sức`,
+            factor_description: admissionAdvice,
             contribution_score: Number((academicScore * 0.35).toFixed(1)),
           },
           {
@@ -772,6 +914,15 @@ export const recommendationService = {
         missing_skills: gaps,
         admitted_blocks: m.blocks,
         industry_outlook: m.outlook || 'Ngành đào tạo chính quy theo danh mục GDĐT cấp IV Bộ GD&ĐT.',
+        // Solution B fields
+        feasibility_tier: feasibilityTier,
+        feasibility_label: feasibilityLabel,
+        benchmark_cutoff: benchmark.benchmarkCutoff,
+        score_gap: scoreGap,
+        best_block_total: Number(bestBlock30Sum.toFixed(1)),
+        admission_advice: admissionAdvice,
+        academic_tier: benchmark.tier,
+        academic_tier_label: benchmark.tierLabel,
       };
       return rec;
     });
@@ -784,9 +935,17 @@ export const recommendationService = {
       fieldMap[cat].push(rec);
     });
 
-    // For each category, sort majors and calculate field stats
+    // For each category, sort majors prioritizing TARGET when student has low grades (< 18.0)
     const broadFields: BroadFieldRecommendation[] = Object.entries(fieldMap).map(([fieldName, majors]) => {
-      majors.sort((a, b) => b.overall_score - a.overall_score);
+      majors.sort((a, b) => {
+        if (hasEnteredGrades) {
+          // If a student has low grades, prioritize TARGET over REACH so realistic majors appear on top
+          if (a.feasibility_tier !== b.feasibility_tier) {
+            return a.feasibility_tier === 'TARGET' ? -1 : 1;
+          }
+        }
+        return b.overall_score - a.overall_score;
+      });
       const topMajors = majors.slice(0, 3);
       const topMajor = topMajors[0];
 

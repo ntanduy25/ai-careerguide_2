@@ -21,6 +21,8 @@ from app.services.recommender.engine import (
     calculate_cognitive_preference_match,
     calculate_3pillar_hybrid_score,
     generate_xai_top_supporting_factors,
+    classify_major_academic_benchmark,
+    evaluate_admission_feasibility,
 )
 
 # Backwards compatibility aliases
@@ -154,18 +156,49 @@ async def calculate_3pillar_recommendations(
             mastered_skill_codes=mastered_skills
         )
 
+        # --- SOLUTION B: ADMISSION FEASIBILITY & REALISTIC BENCHMARKING ---
+        raw_block_sum = 18.0
+        if best_block and isinstance(block_breakdown, dict) and best_block in block_breakdown:
+            raw_block_sum = float(block_breakdown[best_block].get("raw_sum", 18.0))
+
+        feasibility = evaluate_admission_feasibility(
+            raw_block_sum=raw_block_sum,
+            major_code=major.major_code,
+            major_name=major.name,
+            category=major.category
+        )
+
+        # Apply feasibility penalty if the student has a severe score gap for reach majors (e.g. 15 pts vs 25.5 pts)
+        final_academic_score = score_academic
+        if feasibility["feasibility_tier"] == "REACH":
+            deficit_ratio = min(1.0, abs(feasibility["score_gap"]) / 15.0)
+            final_academic_score = max(0.05, score_academic * (1.0 - deficit_ratio * 0.6))
+            overall_score, weights_dict = calculate_3pillar_hybrid_score(
+                score_riasec=score_riasec,
+                score_academic=final_academic_score,
+                score_preference=score_pref,
+                w_riasec=w_riasec,
+                w_academic=w_academic,
+                w_preference=w_pref
+            )
+
         # --- DETERMINISTIC XAI EXPLANATIONS ---
         top_factors, summary_expl = generate_xai_top_supporting_factors(
             major_name=major.name,
             score_riasec=score_riasec,
             student_riasec=student_riasec,
             major_riasec=major.riasec_vector,
-            score_academic=score_academic,
+            score_academic=final_academic_score,
             best_block=best_block,
             score_pref=score_pref,
             student_pref=student_pref,
             major_attr=major.cognitive_attributes
         )
+
+        if feasibility["feasibility_tier"] == "REACH":
+            top_factors.insert(0, f"Cảnh báo phân tầng: {feasibility['feasibility_label']}. {feasibility['admission_advice']}")
+        else:
+            top_factors.insert(0, f"Độ tương thích học lực an toàn: Khối {best_block or 'xét tuyển'} ({raw_block_sum}đ) đạt ngưỡng sàn ({feasibility['benchmark_cutoff']}đ).")
 
         scored_items.append(MajorRecommendationItem(
             rank=0,
@@ -174,26 +207,39 @@ async def calculate_3pillar_recommendations(
             major_name=major.name,
             overall_score=overall_score,
             score_riasec=score_riasec,
-            score_academic=score_academic,
+            score_academic=final_academic_score,
             score_preference=score_pref,
             best_matching_block=best_block,
             score_breakdown={
                 "weights": weights_dict,
                 "score_riasec": score_riasec,
-                "score_academic": score_academic,
+                "score_academic": final_academic_score,
                 "score_preference": score_pref,
-                "admitted_blocks_evaluated": block_breakdown
+                "admitted_blocks_evaluated": block_breakdown,
+                "feasibility": feasibility
             },
             top_supporting_factors=top_factors,
             competency_gaps=overall_gaps[:5],
             missing_prerequisites=missing_pre[:3],
             missing_target_skills=missing_tar[:3],
-            explanation=summary_expl
+            explanation=summary_expl,
+            feasibility_tier=feasibility["feasibility_tier"],
+            feasibility_label=feasibility["feasibility_label"],
+            benchmark_cutoff=feasibility["benchmark_cutoff"],
+            score_gap=feasibility["score_gap"],
+            admission_advice=feasibility["admission_advice"],
+            academic_tier=feasibility["academic_tier"],
+            academic_tier_label=feasibility["academic_tier_label"]
         ))
 
-    # Deterministic Sort: primary key overall_score descending, secondary key score_academic descending
+    # Deterministic Sort: prioritize realistic TARGET majors if student has low grades (< 17.5)
     scored_items.sort(
-        key=lambda item: (item.overall_score, item.score_academic, item.score_riasec),
+        key=lambda item: (
+            1 if item.feasibility_tier == "TARGET" else 0,
+            item.overall_score,
+            item.score_academic,
+            item.score_riasec
+        ),
         reverse=True
     )
 

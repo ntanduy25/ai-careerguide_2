@@ -43,6 +43,17 @@ class MajorRecommendationItem(BaseModel):
     explanation: str = Field(
         description="Transparent, deterministic XAI breakdown of why this major was recommended"
     )
+    # Solution B: Dynamic Academic Clustering & Admission Feasibility
+    feasibility_tier: Optional[str] = Field(
+        default="TARGET",
+        description="TARGET (Vừa sức), REACH (Thử thách/Mơ ước), or ALTERNATIVE"
+    )
+    feasibility_label: Optional[str] = Field(default="Vừa sức / Khả thi cao")
+    benchmark_cutoff: Optional[float] = Field(default=None)
+    score_gap: Optional[float] = Field(default=None)
+    admission_advice: Optional[str] = Field(default=None)
+    academic_tier: Optional[str] = Field(default="STANDARD_COMPETITION")
+    academic_tier_label: Optional[str] = Field(default="Vừa sức / Tiêu chuẩn")
 
 
 class RecommendationResponse(BaseModel):

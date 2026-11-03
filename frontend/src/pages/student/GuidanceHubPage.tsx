@@ -367,6 +367,40 @@ export const GuidanceHubPage: React.FC = () => {
   const [selectedField, setSelectedField] = useState<BroadFieldRecommendation | null>(null);
   const [selectedMajor, setSelectedMajor] = useState<MajorRecommendation | null>(null);
 
+  // Solution B: Feasibility filter & Student Best Block computation
+  const [feasibilityFilter, setFeasibilityFilter] = useState<'ALL' | 'TARGET' | 'REACH'>('ALL');
+
+  const studentBestBlockSum = useMemo(() => {
+    if (!grades) return null;
+    const math = Number((grades as any).math ?? 0);
+    const physics = Number((grades as any).physics ?? 0);
+    const chemistry = Number((grades as any).chemistry ?? 0);
+    const english = Number((grades as any).english ?? 0);
+    const literature = Number((grades as any).literature ?? 0);
+    const bio = Number((grades as any).biology ?? 0);
+    const history = Number((grades as any).history ?? 0);
+    const geography = Number((grades as any).geography ?? 0);
+
+    const blocks = [
+      { code: 'B00', name: 'Khối B00 (Toán, Hóa, Sinh)', sum: math + chemistry + bio },
+      { code: 'A00', name: 'Khối A00 (Toán, Lý, Hóa)', sum: math + physics + chemistry },
+      { code: 'A01', name: 'Khối A01 (Toán, Lý, Anh)', sum: math + physics + english },
+      { code: 'D01', name: 'Khối D01 (Toán, Văn, Anh)', sum: math + literature + english },
+      { code: 'C00', name: 'Khối C00 (Văn, Sử, Địa)', sum: literature + history + geography },
+    ];
+    blocks.sort((a, b) => b.sum - a.sum);
+    return blocks[0].sum > 0 ? blocks[0] : null;
+  }, [grades]);
+
+  const displayedMajors = useMemo(() => {
+    if (!selectedField) return [];
+    if (feasibilityFilter === 'ALL') return selectedField.majors;
+    return selectedField.majors.filter((m) => m.feasibility_tier === feasibilityFilter);
+  }, [selectedField, feasibilityFilter]);
+
+  const targetCount = selectedField?.majors.filter((m) => m.feasibility_tier === 'TARGET').length || 0;
+  const reachCount = selectedField?.majors.filter((m) => m.feasibility_tier === 'REACH').length || 0;
+
   // Recommendation History state
   const [historyList, setHistoryList] = useState<RecommendationHistoryItem[]>(() =>
     recommendationHistoryService.getHistory(userId)
@@ -1737,6 +1771,75 @@ export const GuidanceHubPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* SOLUTION B: KHUYẾN NGHỊ SƯ PHẠM & ĐỊNH HƯỚNG PHÂN TẦNG HỌC LỰC */}
+              {studentBestBlockSum && (
+                <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/70 to-purple-50/80 border border-indigo-200/90 rounded-xl p-4 sm:p-5 shadow-xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 pb-2.5">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                          Chẩn Đoán Năng Lực & Phân Tầng Tuyển Sinh (Giải Pháp B)
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          Định hướng thực tế theo phổ điểm tổ hợp mạnh nhất của bạn
+                        </p>
+                      </div>
+                    </div>
+                    <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white border border-indigo-200 shadow-2xs text-xs font-bold text-indigo-900 self-start sm:self-auto">
+                      <span>{studentBestBlockSum.name}:</span>
+                      <span className="text-indigo-600 text-sm font-black">{studentBestBlockSum.sum.toFixed(1)} / 30đ</span>
+                      <span className="text-[10px] text-slate-400 font-normal">
+                        (TB: {(studentBestBlockSum.sum / 3).toFixed(1)}đ/môn)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+                    {/* Card 1: Target */}
+                    <div className="p-3 rounded-lg bg-white/90 border border-emerald-200 shadow-2xs space-y-1">
+                      <div className="flex items-center space-x-1.5 text-emerald-700 font-bold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span>Nhóm Vừa Sức (Target)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-snug">
+                        {studentBestBlockSum.sum < 18.0
+                          ? 'Gợi ý các ngành Đại học có điểm sàn từ 15.0 - 18.5đ (Công nghệ sinh học, Thú y, Nông lâm, Y tế công cộng...). Cơ hội trúng tuyển cao.'
+                          : 'Các ngành có điểm chuẩn tương đương điểm của bạn, khả năng trúng tuyển rất cao và an toàn.'}
+                      </p>
+                    </div>
+
+                    {/* Card 2: Reach */}
+                    <div className="p-3 rounded-lg bg-white/90 border border-amber-200 shadow-2xs space-y-1">
+                      <div className="flex items-center space-x-1.5 text-amber-800 font-bold">
+                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                        <span>Nhóm Thử Thách (Reach)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-snug">
+                        {studentBestBlockSum.sum < 18.0
+                          ? 'Y khoa, Dược học, Răng Hàm Mặt, CNTT... điểm chuẩn thường ≥ 25.5đ. Gắn cảnh báo cách biệt điểm (~10đ) để bạn nhận thức rõ thực tế.'
+                          : 'Các ngành tinh hoa top đầu đòi hỏi điểm bứt phá. Phù hợp đặt ở nguyện vọng 1 để thử sức.'}
+                      </p>
+                    </div>
+
+                    {/* Card 3: Alternative / College Pathway */}
+                    <div className="p-3 rounded-lg bg-white/90 border border-blue-200 shadow-2xs space-y-1">
+                      <div className="flex items-center space-x-1.5 text-blue-700 font-bold">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        <span>Lộ Trình Sư Phạm Thực Tế</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-snug">
+                        {studentBestBlockSum.sum < 18.0
+                          ? 'Nếu giữ mức ~15 điểm nhưng đam mê ngành Y Dược, nên ưu tiên xét học bạ hệ Cao đẳng Y Dược chính quy rồi liên thông Đại học sau này.'
+                          : 'Kết hợp đa dạng phương thức xét tuyển (Học bạ, ĐGNL, thi THPT) để tối đa hóa cơ hội vào trường đại học mơ ước.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* TẦNG 1: TOP 3 LĨNH VỰC ĐÀO TẠO */}
               <div className="space-y-3">
                 <div>
@@ -1823,12 +1926,56 @@ export const GuidanceHubPage: React.FC = () => {
                     <h3 className="text-base font-bold text-slate-900">
                       Ngành Học Trong Lĩnh Vực: <span className="text-blue-700">{selectedField.field_name}</span>
                     </h3>
+
+                    {/* Feasibility Filter Tabs (Solution B) */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setFeasibilityFilter('ALL')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          feasibilityFilter === 'ALL'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        Tất cả ({selectedField.majors.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFeasibilityFilter('TARGET')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 ${
+                          feasibilityFilter === 'TARGET'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+                        }`}
+                      >
+                        <span>🟢 Vừa sức / Khả thi cao</span>
+                        <span className="text-[10px] opacity-80">({targetCount})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFeasibilityFilter('REACH')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 ${
+                          feasibilityFilter === 'REACH'
+                            ? 'bg-amber-600 text-white shadow-xs'
+                            : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200'
+                        }`}
+                      >
+                        <span>🔴 Thử thách / Mơ ước</span>
+                        <span className="text-[10px] opacity-80">({reachCount})</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                     {/* Left Column (5 cols): Specific Majors List */}
                     <div className="lg:col-span-5 space-y-2.5">
-                      {selectedField.majors.map((rec, index) => {
+                      {displayedMajors.length === 0 ? (
+                        <div className="p-6 text-center rounded-xl border border-dashed border-slate-300 text-xs text-slate-500 bg-slate-50/50">
+                          Không có ngành nào thuộc phân tầng này trong lĩnh vực đã chọn.
+                        </div>
+                      ) : (
+                        displayedMajors.map((rec, index) => {
                         const isSelected = selectedMajor?.major_code === rec.major_code;
 
                         return (
@@ -1852,13 +1999,22 @@ export const GuidanceHubPage: React.FC = () => {
                                   <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                                     {rec.major_code}
                                   </span>
-                                  <span className="text-[10px] text-slate-500 font-medium">
-                                    Ngành #{index + 1}
-                                  </span>
+                                  {rec.feasibility_tier === 'REACH' ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                                      🔴 Thử thách
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                                      🟢 Vừa sức
+                                    </span>
+                                  )}
                                 </div>
                                 <h4 className="text-xs font-bold text-slate-900 leading-tight">
                                   {rec.major_name}
                                 </h4>
+                                <div className="text-[10px] text-slate-500 font-medium">
+                                  Sàn chuẩn: ~{rec.benchmark_cutoff}đ {rec.score_gap !== undefined && rec.score_gap < 0 ? `(thiếu ~${Math.abs(rec.score_gap)}đ)` : '(đáp ứng)'}
+                                </div>
                               </div>
 
                               <div className="text-right shrink-0">
@@ -1932,7 +2088,8 @@ export const GuidanceHubPage: React.FC = () => {
                             </div>
                           </div>
                         );
-                      })}
+                        })
+                      )}
                     </div>
 
                     {/* Right Column (7 cols): Selected Major XAI Details */}
@@ -1960,6 +2117,42 @@ export const GuidanceHubPage: React.FC = () => {
                               </div>
                               <span className="text-[10px] text-slate-500">Điểm tổng hợp</span>
                             </div>
+                          </div>
+
+                          {/* Solution B: Đánh giá Tính Khả thi Tuyển sinh */}
+                          <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                            selectedMajor.feasibility_tier === 'REACH'
+                              ? 'bg-amber-50/70 border-amber-300 text-amber-900'
+                              : 'bg-emerald-50/70 border-emerald-300 text-emerald-900'
+                          }`}>
+                            <div className="flex items-center justify-between font-bold">
+                              <div className="flex items-center space-x-1.5">
+                                <span className={`w-2 h-2 rounded-full ${
+                                  selectedMajor.feasibility_tier === 'REACH' ? 'bg-amber-600' : 'bg-emerald-600'
+                                }`}></span>
+                                <span>
+                                  {selectedMajor.feasibility_tier === 'REACH'
+                                    ? 'Phân Tầng: Thử Thách Cao / Nguyện Vọng Mơ Ước'
+                                    : 'Phân Tầng: Vừa Sức / Khả Thi Trúng Tuyển Cao'}
+                                </span>
+                              </div>
+                              <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-white/80 border border-current font-bold">
+                                Sàn tham chiếu: ~{selectedMajor.benchmark_cutoff}đ
+                              </span>
+                            </div>
+                            <p className="text-[11.5px] leading-relaxed">
+                              {selectedMajor.admission_advice}
+                            </p>
+                            {selectedMajor.feasibility_tier === 'REACH' && (
+                              <div className="pt-1 mt-1 border-t border-amber-200/80 text-[11px] text-amber-800 space-y-0.5">
+                                <strong>💡 Lời khuyên chiến lược:</strong>
+                                {selectedMajor.category_name.includes('Sức khỏe') || selectedMajor.major_name.includes('Y') ? (
+                                  <p>Nếu điểm thi tốt nghiệp giữ ở mức ~15 điểm nhưng bạn rất yêu thích ngành này, hãy cân nhắc nộp hồ sơ xét học bạ vào các trường <strong>Cao đẳng Y Dược chính quy</strong> hoặc chọn các ngành cận kề như <em>Công nghệ sinh học, Thú y, Y tế công cộng</em> rồi liên thông sau.</p>
+                                ) : (
+                                  <p>Bạn nên đăng ký ngành này ở nguyện vọng 1 để thử sức, đồng thời chọn thêm các ngành thuộc nhóm 🟢 Vừa sức ở các nguyện vọng tiếp theo để đảm bảo an toàn.</p>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* Radar Chart: Student Vector vs Major Vector */}

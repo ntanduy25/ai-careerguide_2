@@ -325,3 +325,117 @@ def generate_xai_top_supporting_factors(
     )
 
     return supporting_factors, summary_explanation
+
+
+# ==========================================
+# SOLUTION B: DYNAMIC ACADEMIC CLUSTERING & ADMISSION FEASIBILITY
+# ==========================================
+
+def classify_major_academic_benchmark(
+    major_code: str,
+    major_name: str,
+    category: str = ""
+) -> Dict[str, Any]:
+    """
+    Evaluates dynamic admission benchmark and competition tier for any Level-IV major.
+    Handles any Circular (TT09, TT74/2026, or future circulars).
+    """
+    name_lower = (major_name or "").lower()
+    cat_lower = (category or "").lower()
+
+    # Tier 1: Extreme / High Competition (Cutoff typically >= 24.5 - 28.5)
+    high_keywords = [
+        "y khoa", "y đa khoa", "răng hàm mặt", "răng - hàm - mặt", "dược học",
+        "y học cổ truyền", "khoa học máy tính", "trí tuệ nhân tạo", "khoa học dữ liệu",
+        "vi mạch", "bán dẫn", "kinh tế quốc tế", "kinh doanh quốc tế", "luật kinh tế",
+        "logistics"
+    ]
+    if any(k in name_lower for k in high_keywords):
+        return {
+            "tier": "HIGH_COMPETITION",
+            "tier_label": "Cạnh tranh cực cao (≥ 24.5đ)",
+            "benchmark_cutoff": 25.5,
+            "min_recommended": 23.5,
+            "description": "Ngành mũi nhọn với điểm chuẩn đại học thuộc top đầu cả nước."
+        }
+
+    # Tier 2: Medium / Solid Competition (Cutoff typically 19.5 - 23.5)
+    medium_keywords = [
+        "kỹ thuật xét nghiệm", "kỹ thuật hình ảnh", "phục hồi chức năng", "điều dưỡng",
+        "công nghệ thông tin", "an toàn thông tin", "kỹ thuật phần mềm", "hệ thống thông tin",
+        "tài chính", "ngân hàng", "kế toán", "kiểm toán", "marketing", "truyền thông",
+        "thương mại điện tử", "luật", "sư phạm", "ngôn ngữ anh", "ngôn ngữ trung"
+    ]
+    if any(k in name_lower for k in medium_keywords):
+        return {
+            "tier": "MEDIUM_COMPETITION",
+            "tier_label": "Cạnh tranh khá (≥ 19.5đ)",
+            "benchmark_cutoff": 21.0,
+            "min_recommended": 19.0,
+            "description": "Ngành học có tính cạnh tranh khá tại các trường đại học công lập uy tín."
+        }
+
+    # Tier 3: Standard / Accessible Competition (Cutoff typically 15.0 - 18.5)
+    standard_keywords = [
+        "công nghệ sinh học", "sinh học", "y tế công cộng", "dinh dưỡng", "thú y",
+        "chăn nuôi", "nông nghiệp", "cây trồng", "lâm nghiệp", "thủy sản", "môi trường",
+        "đất đai", "thực phẩm", "vật liệu", "dệt may", "văn phòng", "công tác xã hội",
+        "xã hội học", "triết học", "lịch sử", "địa lý", "thống kê", "phát triển", "quản lý nhà nước"
+    ]
+    if any(k in name_lower for k in standard_keywords) or any(k in cat_lower for k in standard_keywords):
+        return {
+            "tier": "STANDARD_COMPETITION",
+            "tier_label": "Vừa sức / Tiêu chuẩn (≥ 15.0đ)",
+            "benchmark_cutoff": 16.5,
+            "min_recommended": 15.0,
+            "description": "Ngành đào tạo ứng dụng thực tế, điểm chuẩn phù hợp với mặt bằng phổ thông."
+        }
+
+    # Default fallback
+    return {
+        "tier": "STANDARD_COMPETITION",
+        "tier_label": "Phổ thông (≥ 16.0đ)",
+        "benchmark_cutoff": 18.0,
+        "min_recommended": 15.5,
+        "description": "Ngành học có phổ điểm tuyển sinh đa dạng theo phân khúc trường."
+    }
+
+
+def evaluate_admission_feasibility(
+    raw_block_sum: float,
+    major_code: str,
+    major_name: str,
+    category: str = ""
+) -> Dict[str, Any]:
+    """
+    Computes feasibility tier (TARGET, REACH, ALTERNATIVE) and score gap.
+    Prevents unrealistic recommendations (e.g. 15 points recommending Medicine as safe).
+    """
+    bm = classify_major_academic_benchmark(major_code, major_name, category)
+    cutoff = bm["benchmark_cutoff"]
+    min_rec = bm["min_recommended"]
+    score_gap = round(raw_block_sum - cutoff, 1)
+
+    if raw_block_sum >= min_rec - 1.0:
+        feasibility_tier = "TARGET"
+        feasibility_label = "Vừa sức / Khả thi cao"
+        advice = f"Điểm khối thi của bạn ({raw_block_sum}đ) nằm trong vùng trúng tuyển an toàn so với điểm sàn tham chiếu (~{cutoff}đ)."
+    else:
+        feasibility_tier = "REACH"
+        gap_abs = abs(score_gap)
+        feasibility_label = f"Thử thách cao (Thiếu ~{gap_abs}đ)"
+        advice = (
+            f"Điểm khối thi ({raw_block_sum}đ) thấp hơn khoảng {gap_abs} điểm so với điểm chuẩn trung bình (~{cutoff}đ). "
+            f"Đây là nguyện vọng mơ ước, cần bứt phá điểm số lớn để cạnh tranh trúng tuyển."
+        )
+
+    return {
+        "feasibility_tier": feasibility_tier,
+        "feasibility_label": feasibility_label,
+        "benchmark_cutoff": cutoff,
+        "min_recommended": min_rec,
+        "score_gap": score_gap,
+        "admission_advice": advice,
+        "academic_tier": bm["tier"],
+        "academic_tier_label": bm["tier_label"]
+    }
