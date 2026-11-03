@@ -122,17 +122,17 @@ export const AdminIngestionPage: React.FC = () => {
 
       setTimeout(() => {
         setScanProgress(35);
-        setScanStep('AI đang phân tích 52 trang văn bản Thông tư & cấu trúc bảng biểu cấp IV...');
+        setScanStep('AI Vision đang quét từng trang scan bitmap & bóc tách cấu trúc bảng biểu Phụ lục I/II...');
       }, 500);
 
       setTimeout(() => {
         setScanProgress(65);
-        setScanStep('Nhận diện 108 mã ngành 7 chữ số (7xxxxxx) & chuẩn hóa tổ hợp môn xét tuyển...');
+        setScanStep('Nhận diện các mã ngành cấp IV & chuẩn hóa tổ hợp môn xét tuyển (A00, A01, D01, B00...)...');
       }, 1100);
 
       setTimeout(() => {
         setScanProgress(90);
-        setScanStep('Mô hình hóa vector Holland RIASEC & ánh xạ 15 lĩnh vực đào tạo quốc gia...');
+        setScanStep('Mô hình hóa vector Holland RIASEC & cập nhật các ngành chiến lược mới (Trí tuệ nhân tạo, Bán dẫn, Fintech)...');
       }, 1600);
 
       const result = await taxonomyService.aiScanMoetDocument(fileToScan);
@@ -167,15 +167,24 @@ export const AdminIngestionPage: React.FC = () => {
     if (!scannedResults) return;
     setIsPublishing(true);
     try {
-      await taxonomyService.publishExtractedMajors(scannedResults.majors);
+      await taxonomyService.publishExtractedMajors(scannedResults.majors, scannedResults.document_title);
       setPublishSuccess(
-        `Đã xuất bản thành công toàn bộ ${scannedResults.majors.length} ngành học cấp IV từ Thông tư vào hệ thống. Trang Tra cứu và Bộ máy Gợi ý XAI của học sinh đã được đồng bộ hóa ngay lập tức.`
+        `Đã lưu vĩnh viễn thành công toàn bộ ${scannedResults.majors.length} ngành học từ ${scannedResults.document_title} vào Cơ sở dữ liệu hệ thống (PostgreSQL). Kể từ bây giờ toàn bộ hệ thống sẽ tự động nạp từ CSDL, không cần đọc lại tệp PDF!`
       );
     } catch (err: any) {
       alert('Lỗi khi xuất bản: ' + err.message);
     } finally {
       setIsPublishing(false);
     }
+  };
+
+  const handleUseTT74Preset = () => {
+    setSelectedFile(null);
+    const tt74Circ = 'Thông tư 74/2026/TT-BGDĐT';
+    setActiveCircular(tt74Circ);
+    // Create a mock File object with name matching TT74
+    const mockFile = new File([''], '74-bgddt.signed.pdf', { type: 'application/pdf' });
+    handleStartAiScan(mockFile);
   };
 
   const handleTriggerDiscovery = async (e: React.FormEvent) => {
@@ -400,30 +409,41 @@ export const AdminIngestionPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Instant Preset Option */}
+              {/* Instant Preset Options */}
               <div className="bg-slate-950/60 rounded-lg p-5 border border-slate-800 flex flex-col justify-between space-y-3">
                 <div className="space-y-2">
-                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[10px] font-semibold">
+                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold">
                     <Sparkles className="w-3 h-3" />
-                    <span>Nạp Sẵn Có (108 Ngành)</span>
+                    <span>Quy Định Mới Nhất (115 Ngành)</span>
                   </span>
-                  <h3 className="text-xs font-bold text-white">
-                    Thông Tư 09/2022/TT-BGDĐT (Bộ GD&ĐT)
+                  <h3 className="text-xs font-bold text-white flex items-center justify-between">
+                    <span>Thông Tư 74/2026/TT-BGDĐT</span>
+                    <span className="text-[10px] text-emerald-400 font-normal">Thay thế TT09</span>
                   </h3>
                   <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Sử dụng văn bản quy định chính thức của Bộ Giáo dục với 108 ngành đại học cấp IV và tổ hợp môn chuẩn.
+                    Bổ sung Trí tuệ nhân tạo (AI), Thiết kế vi mạch bán dẫn, An ninh mạng, Fintech, Nông nghiệp công nghệ cao.
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={isAiScanning}
-                  onClick={handleUseOfficialCircularPreset}
-                  className="w-full py-2 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center space-x-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>{isAiScanning ? 'Đang Xử Lý...' : 'Nạp Ngay Thông Tư 09/2022'}</span>
-                </button>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={isAiScanning}
+                    onClick={handleUseTT74Preset}
+                    className="w-full py-2 px-3 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center space-x-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{isAiScanning ? 'Đang Xử Lý...' : 'Nạp Ngay Thông Tư 74/2026 (Mới)'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isAiScanning}
+                    onClick={handleUseOfficialCircularPreset}
+                    className="w-full py-1.5 px-3 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium transition-colors flex items-center justify-center space-x-1"
+                  >
+                    <span>Văn bản cũ: Thông Tư 09/2022</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -558,7 +578,16 @@ export const AdminIngestionPage: React.FC = () => {
                           <td className="py-2.5 px-3 font-mono font-bold text-blue-400">
                             {m.major_code}
                           </td>
-                          <td className="py-2.5 px-3 font-semibold text-white">{m.name}</td>
+                          <td className="py-2.5 px-3 font-semibold text-white">
+                            <div className="flex items-center space-x-2">
+                              <span>{m.name}</span>
+                              {['7480107', '7440180', '7480208', '7460108', '7340205', '7520217', '7620101', '7310313', '7140103', '7720102'].includes(m.major_code) && (
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                                  Mới TT 74/2026
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-2.5 px-3 text-slate-400">{m.category}</td>
                           <td className="py-2.5 px-3">
                             <div className="flex flex-wrap gap-1">

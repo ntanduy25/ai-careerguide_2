@@ -20,10 +20,35 @@ logger = logging.getLogger(__name__)
 
 
 def load_seed_majors() -> List[dict]:
-    """Loads standardized 108 MOET Level-IV majors from seed JSON."""
-    seed_path = Path(__file__).resolve().parent.parent.parent / "db" / "seeds" / "moet_taxonomy_tt09.json"
-    if seed_path.exists():
-        with open(seed_path, "r", encoding="utf-8") as f:
+    """Loads standardized MOET Level-IV majors prioritizing the active published circular, TT74, or TT09."""
+    seeds_dir = Path(__file__).resolve().parent.parent.parent / "db" / "seeds"
+    
+    # 1. Check for actively published circular
+    active_path = seeds_dir / "moet_taxonomy_active.json"
+    if active_path.exists():
+        try:
+            with open(active_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and "majors" in data:
+                    return data["majors"]
+                elif isinstance(data, list):
+                    return data
+        except Exception as e:
+            logger.warning("Error reading moet_taxonomy_active.json: %s", e)
+
+    # 2. Check for TT74/2026/TT-BGDĐT
+    tt74_path = seeds_dir / "moet_taxonomy_tt74.json"
+    if tt74_path.exists():
+        try:
+            with open(tt74_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning("Error reading moet_taxonomy_tt74.json: %s", e)
+
+    # 3. Fallback to TT09/2022/TT-BGDĐT
+    tt09_path = seeds_dir / "moet_taxonomy_tt09.json"
+    if tt09_path.exists():
+        with open(tt09_path, "r", encoding="utf-8") as f:
             return json.load(f)
     return []
 

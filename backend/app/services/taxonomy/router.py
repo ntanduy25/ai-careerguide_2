@@ -78,3 +78,51 @@ async def sync_tt09_catalog(
             "total": 108,
             "note": f"Synchronized 108 MOET Level-IV majors (fallback mode: {str(exc)})"
         }
+
+
+from pydantic import BaseModel, Field
+
+class PublishMajorsPayload(BaseModel):
+    circular_title: Optional[str] = Field(default="Thông tư 74/2026/TT-BGDĐT", description="Full title of the approved circular")
+    circular_code: Optional[str] = Field(default="74/2026/TT-BGDĐT", description="Code of the circular")
+    majors: List[dict] = Field(description="Approved Level-IV majors list to persist")
+
+
+@router.post("/publish-majors", status_code=status.HTTP_200_OK)
+async def publish_majors_to_db(
+    payload: PublishMajorsPayload,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Publishes newly extracted and approved majors into PostgreSQL CSDL.
+    Guarantees idempotency and persistence so that future sessions read directly
+    from the database without re-reading the PDF file.
+    """
+    import json
+    from pathlib import Path
+    
+    # 1. Persist directly into PostgreSQL majors table
+    res = await service.bulk_sync_majors(db, payload.majors)
+    
+    # 2. Also persist active seeds JSON file on disk for instantaneous zero-latency fallback
+    try:
+        seeds_dir = Path(__file__).resolve().parent.parent.parent / "db" / "seeds"
+        active_path = seeds_dir / "moet_taxonomy_active.json"
+        with open(active_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "circular_title": payload.circular_title,
+                "circular_code": payload.circular_code,
+                "majors": payload.majors
+            }, f, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        pass
+
+    return {
+        "status": "success",
+        "circular_title": payload.circular_title,
+        "circular_code": payload.circular_code,
+        "inserted": res.get("inserted", 0),
+        "updated": res.get("updated", 0),
+        "total": len(payload.majors),
+        "persisted_to_db": True
+    }

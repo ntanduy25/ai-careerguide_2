@@ -9,11 +9,15 @@
  */
 import { MajorItem } from '../types';
 import moetSeedData from './moet_taxonomy_tt09.json';
+import moetSeedDataTT74 from './moet_taxonomy_tt74.json';
 
 export type { MajorItem };
 
-// Toàn bộ 108 ngành đào tạo đại học cấp IV theo Thông tư 09/2022/TT-BGDĐT
+// Danh mục 108 ngành đào tạo đại học theo Thông tư 09/2022/TT-BGDĐT
 export const MOET_108_MAJORS: MajorItem[] = moetSeedData as unknown as MajorItem[];
+
+// Danh mục ngành đào tạo đại học cập nhật theo Thông tư 74/2026/TT-BGDĐT (bổ sung Trí tuệ nhân tạo, Bán dẫn, Fintech, v.v.)
+export const MOET_TT74_MAJORS: MajorItem[] = (moetSeedDataTT74 || moetSeedData) as unknown as MajorItem[];
 
 // 6 ngành nòng cốt ban đầu (Initial Fallback khi CSDL đang khởi tạo)
 export const INITIAL_SIX_MAJORS: MajorItem[] = [

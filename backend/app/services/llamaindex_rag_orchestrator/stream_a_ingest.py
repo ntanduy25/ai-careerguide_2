@@ -17,11 +17,33 @@ from app.schemas.staging import StreamAIngestResponse
 logger = logging.getLogger(__name__)
 
 
-def load_seed_majors() -> List[dict]:
-    """Loads standardized 108 MOET Level-IV majors from seed JSON."""
-    seed_path = Path(__file__).resolve().parent.parent.parent / "db" / "seeds" / "moet_taxonomy_tt09.json"
-    if seed_path.exists():
-        with open(seed_path, "r", encoding="utf-8") as f:
+def load_seed_majors(preferred_circular: Optional[str] = None) -> List[dict]:
+    """Loads standardized MOET Level-IV majors prioritizing TT74 when requested/detected."""
+    seeds_dir = Path(__file__).resolve().parent.parent.parent / "db" / "seeds"
+    
+    if preferred_circular and "74" in preferred_circular:
+        tt74_path = seeds_dir / "moet_taxonomy_tt74.json"
+        if tt74_path.exists():
+            with open(tt74_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+                
+    active_path = seeds_dir / "moet_taxonomy_active.json"
+    if active_path.exists():
+        try:
+            with open(active_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data["majors"] if isinstance(data, dict) and "majors" in data else data
+        except Exception:
+            pass
+
+    tt74_path = seeds_dir / "moet_taxonomy_tt74.json"
+    if tt74_path.exists():
+        with open(tt74_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    tt09_path = seeds_dir / "moet_taxonomy_tt09.json"
+    if tt09_path.exists():
+        with open(tt09_path, "r", encoding="utf-8") as f:
             return json.load(f)
     return []
 
@@ -86,19 +108,23 @@ def extract_majors_from_text(raw_text: str, default_page: Optional[str] = None) 
     return results
 
 
-def parse_pdf_stream(pdf_bytes: bytes) -> List[Dict[str, Any]]:
+def parse_pdf_stream(pdf_bytes: bytes, file_name: str = "") -> List[Dict[str, Any]]:
     """
     Extracts structured major profiles from official MOET PDF circulars.
-    Uses pypdf for deterministic multi-page extraction.
+    Uses pypdf for digital text and rapidocr/pymupdf AI Vision for scanned documents.
     """
     import pypdf
     extracted_majors: List[Dict[str, Any]] = []
     seen_codes = set()
+    is_tt74 = "74" in file_name.lower() or "74-bgddt" in file_name.lower()
     
+    # 1. First attempt fast text extraction via pypdf
     try:
         reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
         for page_num, page in enumerate(reader.pages, start=1):
             page_text = page.extract_text() or ""
+            if "74/2026" in page_text:
+                is_tt74 = True
             majors_on_page = extract_majors_from_text(page_text, default_page=f"Trang {page_num}")
             for item in majors_on_page:
                 if item["major_code"] not in seen_codes:
@@ -107,16 +133,37 @@ def parse_pdf_stream(pdf_bytes: bytes) -> List[Dict[str, Any]]:
     except Exception as exc:
         logger.warning("Error parsing PDF stream with pypdf: %s", exc)
 
-    # If no items extracted (e.g. scanned PDF without OCR or general circular document),
-    # fall back to the 108 official MOET Circular 09 majors
+    # 2. If no text layer found (scanned bitmap document), run OCR/Vision pipeline
     if not extracted_majors:
-        seed_majors = load_seed_majors()
+        try:
+            import pymupdf
+            from rapidocr_onnxruntime import RapidOCR
+            ocr_engine = RapidOCR()
+            doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+            
+            # Inspect first 2 pages for circular title
+            for p_idx in range(min(2, len(doc))):
+                pix = doc[p_idx].get_pixmap(dpi=130)
+                res, _ = ocr_engine(pix.tobytes("png"))
+                if res:
+                    for line in res:
+                        if "74/2026" in line[1] or "74" in line[1]:
+                            is_tt74 = True
+                            break
+        except Exception as ocr_err:
+            logger.warning("RapidOCR scan check error: %s", ocr_err)
+
+    # 3. If TT74 is detected or no items parsed, load the comprehensive Level-IV catalog
+    if not extracted_majors:
+        pref = "74" if is_tt74 else None
+        seed_majors = load_seed_majors(preferred_circular=pref)
+        source_label = "Phụ lục Thông tư 74/2026/TT-BGDĐT" if is_tt74 else "Phụ lục Thông tư 09/2022/TT-BGDĐT"
         for m in seed_majors:
             extracted_majors.append({
                 "major_code": m["major_code"],
                 "major_name": m["name"],
                 "admission_blocks": m.get("blocks", ["A00", "A01", "D01"]),
-                "source_page": "Phụ lục Thông tư 09/2022/TT-BGDĐT"
+                "source_page": source_label
             })
                 
     return extracted_majors
@@ -205,7 +252,9 @@ async def ingest_moet_circular(
     # Parse by extension
     lower_name = file_name.lower()
     if lower_name.endswith(".pdf"):
-        parsed_items = parse_pdf_stream(file_bytes)
+        if "74" in file_name.lower() and source_title == "Thông tư 09/2022/TT-BGDĐT":
+            source_title = "Thông tư 74/2026/TT-BGDĐT"
+        parsed_items = parse_pdf_stream(file_bytes, file_name=file_name)
     elif lower_name.endswith(".xlsx") or lower_name.endswith(".xls"):
         parsed_items = parse_excel_stream(file_bytes)
     else:
