@@ -44,7 +44,7 @@ export const AdminMajorsManagementPage: React.FC = () => {
     setActionNotice('Đang đồng bộ dữ liệu trực tiếp từ CSDL...');
     const all = await taxonomyService.syncFromDatabase();
     setMajors(all);
-    setActionNotice('Đã đồng bộ toàn bộ 108 ngành cấp IV theo ${getActiveCircular()}!');
+    setActionNotice(`Đã đồng bộ toàn bộ ${all.length} ngành cấp IV theo ${getActiveCircular()}!`);
     setTimeout(() => setActionNotice(null), 4000);
   };
 
@@ -84,7 +84,7 @@ export const AdminMajorsManagementPage: React.FC = () => {
               className="px-3.5 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition-colors"
             >
               <UploadCloud className="w-3.5 h-3.5" />
-              <span>Quét PDF để nạp 108 ngành</span>
+              <span>Quét PDF Thông tư để nạp danh mục ngành</span>
             </Link>
           ) : (
             <button

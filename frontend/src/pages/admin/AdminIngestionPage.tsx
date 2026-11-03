@@ -45,6 +45,7 @@ export const AdminIngestionPage: React.FC = () => {
   // Search & Filter for Extracted Majors
   const [searchFilter, setSearchFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [displayLimit, setDisplayLimit] = useState<number>(50);
   const activeCircular = useActiveCircular();
   const [circularInput, setCircularInput] = useState('');
 
@@ -483,7 +484,7 @@ export const AdminIngestionPage: React.FC = () => {
                       className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs"
                     >
                       <Layers className="w-3.5 h-3.5" />
-                      <span>Xem Danh Mục 108 Ngành</span>
+                      <span>Xem Danh Mục Ngành Cấp IV</span>
                     </Link>
                     <Link
                       to="/taxonomy"
@@ -573,7 +574,7 @@ export const AdminIngestionPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-sans">
-                      {filteredScannedMajors.slice(0, 50).map((m) => (
+                      {filteredScannedMajors.slice(0, displayLimit).map((m) => (
                         <tr key={m.major_code} className="hover:bg-slate-850/40 transition-colors">
                           <td className="py-2.5 px-3 font-mono font-bold text-blue-400">
                             {m.major_code}
@@ -616,11 +617,28 @@ export const AdminIngestionPage: React.FC = () => {
                   </table>
                 </div>
 
-                {filteredScannedMajors.length > 50 && (
-                  <div className="p-2.5 bg-slate-950 text-center text-[11px] text-slate-400 border-t border-slate-800">
-                    Hiển thị 50 / {filteredScannedMajors.length} ngành. Toàn bộ sẽ được xuất bản khi bấm nút trên.
+                <div className="p-2.5 bg-slate-950 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 border-t border-slate-800 gap-2">
+                  <span>
+                    Đang hiển thị {Math.min(displayLimit, filteredScannedMajors.length)} / {filteredScannedMajors.length} ngành. Toàn bộ {filteredScannedMajors.length} ngành sẽ được lưu vào CSDL khi bấm nút Phê Duyệt.
+                  </span>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-[10px] text-slate-400">Xem:</span>
+                    {[50, 100, 200, 500].map((lim) => (
+                      <button
+                        key={lim}
+                        type="button"
+                        onClick={() => setDisplayLimit(lim)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                          displayLimit === lim
+                            ? 'bg-blue-600 text-white font-bold'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                      >
+                        {lim === 500 ? `Tất cả (${filteredScannedMajors.length})` : lim}
+                      </button>
+                    ))}
                   </div>
-                )}
+                </div>
               </div>
             </div>
           )}
