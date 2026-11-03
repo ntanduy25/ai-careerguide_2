@@ -414,7 +414,7 @@ export const AdminIngestionPage: React.FC = () => {
                 <div className="space-y-2">
                   <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold">
                     <Sparkles className="w-3 h-3" />
-                    <span>Quy Định Mới Nhất (115 Ngành)</span>
+                    <span>Quy Định Mới Nhất (Đầy Đủ 435 Ngành Cấp IV)</span>
                   </span>
                   <h3 className="text-xs font-bold text-white flex items-center justify-between">
                     <span>Thông Tư 74/2026/TT-BGDĐT</span>
@@ -433,7 +433,7 @@ export const AdminIngestionPage: React.FC = () => {
                     className="w-full py-2 px-3 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center space-x-1.5"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>{isAiScanning ? 'Đang Xử Lý...' : 'Nạp Ngay Thông Tư 74/2026 (Mới)'}</span>
+                    <span>{isAiScanning ? 'Đang Xử Lý...' : 'Nạp Ngay Thông Tư 74/2026 (Đầy Đủ 435 Ngành)'}</span>
                   </button>
                   <button
                     type="button"
