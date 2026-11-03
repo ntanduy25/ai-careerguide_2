@@ -108,6 +108,87 @@ def extract_majors_from_text(raw_text: str, default_page: Optional[str] = None) 
     return results
 
 
+
+
+def extract_with_ai_vision_model(pdf_bytes: bytes, max_pages: int = 2) -> List[Dict[str, Any]]:
+    """
+    Invokes Multimodal AI Vision (qwen/qwen3-vl-plus:free) on PDF page bitmaps
+    to accurately extract Level-IV majors with full Vietnamese diacritics.
+    """
+    import base64
+    from openai import OpenAI
+    from app.core.config import settings
+
+    if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
+        return []
+
+    api_key = getattr(settings, "XAI_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "")
+    base_url = getattr(settings, "XAI_BASE_URL", "") or getattr(settings, "OPENAI_BASE_URL", "") or "https://api.xkiro.com/v1"
+    if not api_key:
+        return []
+
+    extracted: List[Dict[str, Any]] = []
+    try:
+        import pymupdf
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        # Target sample table pages (Phụ lục I usually starts at page 8..15)
+        pages_to_scan = [min(7, len(doc) - 1), min(12, len(doc) - 1)][:max_pages]
+
+        for p_idx in pages_to_scan:
+            pix = doc[p_idx].get_pixmap(dpi=140)
+            b64_img = base64.b64encode(pix.tobytes("png")).decode("utf-8")
+
+            prompt = (
+                "Đây là hình ảnh trang danh mục ngành đào tạo cấp IV trong Thông tư quy định của Bộ GD&ĐT. "
+                "Hãy trích xuất danh sách các ngành trong bảng theo định dạng JSON array: "
+                '[{"major_code": "mã 6 hoặc 7 số", "major_name": "tên ngành", "category": "lĩnh vực"}]. '
+                "Chỉ trả về JSON thuần túy, không có văn bản giải thích."
+            )
+
+            resp = client.chat.completions.create(
+                model=getattr(settings, "VISION_LLM_MODEL", "qwen/qwen3-vl-plus:free"),
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{b64_img}"}
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1500,
+                temperature=0.1,
+                timeout=25
+            )
+
+            txt = resp.choices[0].message.content or ""
+            clean_txt = re.sub(r"^```json\s*", "", txt.strip())
+            clean_txt = re.sub(r"```$", "", clean_txt).strip()
+            data = json.loads(clean_txt)
+            if isinstance(data, list):
+                for item in data:
+                    if "major_code" in item and "major_name" in item:
+                        code = str(item["major_code"]).strip()
+                        if not code.startswith("7") and len(code) == 6:
+                            code = f"7{code}"
+                        extracted.append({
+                            "major_code": code,
+                            "major_name": str(item["major_name"]).strip(),
+                            "category": str(item.get("category", "Khác")).strip(),
+                            "admission_blocks": ["A00", "A01", "D01"],
+                            "source_page": f"AI Vision (Qwen3-VL) - Trang {p_idx + 1}"
+                        })
+    except Exception as e:
+        logger.warning("Vision AI extraction notice: %s", e)
+
+    return extracted
+
+
 def parse_pdf_stream(pdf_bytes: bytes, file_name: str = "") -> List[Dict[str, Any]]:
     """
     Extracts structured major profiles from official MOET PDF circulars.
@@ -133,15 +214,20 @@ def parse_pdf_stream(pdf_bytes: bytes, file_name: str = "") -> List[Dict[str, An
     except Exception as exc:
         logger.warning("Error parsing PDF stream with pypdf: %s", exc)
 
-    # 2. If no text layer found (scanned bitmap document), run OCR/Vision pipeline
+    # 2. If no text layer found (scanned bitmap document), run Multimodal AI Vision pipeline
     if not extracted_majors:
+        vision_items = extract_with_ai_vision_model(pdf_bytes)
+        for vi in vision_items:
+            if vi["major_code"] not in seen_codes:
+                seen_codes.add(vi["major_code"])
+                extracted_majors.append(vi)
+                
+        # Also run OCR metadata check for circular identification
         try:
             import pymupdf
             from rapidocr_onnxruntime import RapidOCR
             ocr_engine = RapidOCR()
             doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-            
-            # Inspect first 2 pages for circular title
             for p_idx in range(min(2, len(doc))):
                 pix = doc[p_idx].get_pixmap(dpi=130)
                 res, _ = ocr_engine(pix.tobytes("png"))
@@ -151,7 +237,7 @@ def parse_pdf_stream(pdf_bytes: bytes, file_name: str = "") -> List[Dict[str, An
                             is_tt74 = True
                             break
         except Exception as ocr_err:
-            logger.warning("RapidOCR scan check error: %s", ocr_err)
+            logger.warning("RapidOCR scan check notice: %s", ocr_err)
 
     # 3. If TT74 is detected or no items parsed, load the comprehensive Level-IV catalog
     if not extracted_majors:

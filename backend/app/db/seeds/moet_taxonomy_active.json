@@ -1,0 +1,28 @@
+{
+  "circular_title": "Thông tư 74/2026/TT-BGDĐT",
+  "circular_code": "74/2026/TT-BGDĐT",
+  "majors": [
+    {
+      "major_code": "7480107",
+      "name": "Trí tuệ nhân tạo (AI)",
+      "category": "Máy tính & Công nghệ thông tin",
+      "blocks": [
+        "A00",
+        "A01",
+        "D01",
+        "D07"
+      ],
+      "careers": [
+        "Kỹ sư Trí tuệ nhân tạo (AI Engineer)"
+      ],
+      "riasec": {
+        "R": 0.4,
+        "I": 0.95,
+        "A": 0.3,
+        "S": 0.2,
+        "E": 0.4,
+        "C": 0.7
+      }
+    }
+  ]
+}

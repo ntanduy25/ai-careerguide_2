@@ -101,8 +101,15 @@ async def publish_majors_to_db(
     import json
     from pathlib import Path
     
-    # 1. Persist directly into PostgreSQL majors table
-    res = await service.bulk_sync_majors(db, payload.majors)
+    persisted_to_db = False
+    res = {"inserted": 0, "updated": 0}
+    
+    # 1. Persist directly into PostgreSQL majors table if DB is available
+    try:
+        res = await service.bulk_sync_majors(db, payload.majors)
+        persisted_to_db = True
+    except Exception as db_err:
+        pass
     
     # 2. Also persist active seeds JSON file on disk for instantaneous zero-latency fallback
     try:
@@ -124,5 +131,5 @@ async def publish_majors_to_db(
         "inserted": res.get("inserted", 0),
         "updated": res.get("updated", 0),
         "total": len(payload.majors),
-        "persisted_to_db": True
+        "persisted_to_db": persisted_to_db
     }
