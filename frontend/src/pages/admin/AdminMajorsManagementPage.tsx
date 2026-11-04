@@ -5,12 +5,13 @@ import {
   BookOpen,
   Search,
   Filter,
-  UploadCloud,
   Layers,
   CheckCircle2,
   AlertCircle,
   ExternalLink,
   RefreshCw,
+  Download,
+  Database,
 } from 'lucide-react';
 import { taxonomyService } from '../../services/careerServices';
 import { MajorItem } from '../../data/defaultTaxonomy';
@@ -19,6 +20,7 @@ export const AdminMajorsManagementPage: React.FC = () => {
   const [majors, setMajors] = useState<MajorItem[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [displayLimit, setDisplayLimit] = useState<number>(50);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,19 +35,22 @@ export const AdminMajorsManagementPage: React.FC = () => {
     setMajors(list);
   };
 
-  const handleResetToSix = () => {
-    const updated = taxonomyService.resetToInitial();
-    setMajors(updated);
-    setActionNotice('Đã khôi phục về danh mục 6 ngành ban đầu (chưa nạp Thông tư PDF).');
-    setTimeout(() => setActionNotice(null), 4000);
-  };
-
-  const handleSyncAll108 = async () => {
+  const handleSyncFromDatabase = async () => {
     setActionNotice('Đang đồng bộ dữ liệu trực tiếp từ CSDL...');
     const all = await taxonomyService.syncFromDatabase();
     setMajors(all);
     setActionNotice(`Đã đồng bộ toàn bộ ${all.length} ngành cấp IV theo ${getActiveCircular()}!`);
     setTimeout(() => setActionNotice(null), 4000);
+  };
+
+  const handleExportJson = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(majors, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `danh_muc_nganh_${getActiveCircular().replace(/[\/\s]/g, '_')}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   const categories = ['ALL', ...Array.from(new Set(majors.map((m) => m.category)))];
@@ -56,7 +61,7 @@ export const AdminMajorsManagementPage: React.FC = () => {
     const matchesSearch =
       m.name.toLowerCase().includes(term) ||
       m.major_code.includes(term) ||
-      m.blocks.some((b) => b.toLowerCase().includes(term));
+      (m.blocks && m.blocks.some((b) => b.toLowerCase().includes(term)));
     return matchesCat && matchesSearch;
   });
 
@@ -73,28 +78,34 @@ export const AdminMajorsManagementPage: React.FC = () => {
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Danh mục giáo dục đào tạo cấp IV {getActiveCircular()} phục vụ bộ máy gợi ý XAI.
+            Danh mục giáo dục đào tạo cấp IV {getActiveCircular()} lưu trữ vĩnh viễn trong CSDL phục vụ bộ máy gợi ý XAI.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
-          {majors.length <= 6 ? (
-            <Link
-              to="/admin/ingest"
-              className="px-3.5 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition-colors"
-            >
-              <UploadCloud className="w-3.5 h-3.5" />
-              <span>Quét PDF Thông tư để nạp danh mục ngành</span>
-            </Link>
-          ) : (
-            <button
-              onClick={handleResetToSix}
-              className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 flex items-center space-x-1.5 transition-colors"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Reset về 6 ngành mẫu</span>
-            </button>
-          )}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleSyncFromDatabase}
+            className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Đồng bộ CSDL</span>
+          </button>
+
+          <button
+            onClick={handleExportJson}
+            className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 flex items-center space-x-1.5 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5 text-blue-400" />
+            <span>Xuất JSON</span>
+          </button>
+
+          <Link
+            to="/admin/ingest"
+            className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 flex items-center space-x-1.5 transition-colors"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Quản lý nạp CSDL</span>
+          </Link>
 
           <Link
             to="/taxonomy"
@@ -122,7 +133,7 @@ export const AdminMajorsManagementPage: React.FC = () => {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm theo mã ngành, tên ngành, tổ hợp môn..."
+            placeholder="Tìm theo mã ngành (7480107...), tên ngành, tổ hợp môn..."
             className="w-full pl-9 pr-3 py-1.5 rounded-md bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -142,9 +153,9 @@ export const AdminMajorsManagementPage: React.FC = () => {
 
       {/* Table */}
       <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[500px]">
           <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+            <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800 sticky top-0">
               <tr>
                 <th className="px-4 py-3 font-semibold">Mã Cấp IV</th>
                 <th className="px-4 py-3 font-semibold">Tên Ngành Đào Tạo</th>
@@ -162,13 +173,20 @@ export const AdminMajorsManagementPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filtered.map((m) => (
+                filtered.slice(0, displayLimit).map((m) => (
                   <tr key={m.major_code} className="hover:bg-slate-850/40 transition-colors">
                     <td className="px-4 py-3 font-mono font-semibold text-blue-400">
                       {m.major_code}
                     </td>
                     <td className="px-4 py-3 font-semibold text-white">
-                      {m.name}
+                      <div className="flex items-center space-x-2">
+                        <span>{m.name}</span>
+                        {['7480107', '7440180', '7480208', '7460108', '7340205', '7520217', '7620101', '7310313', '7140103', '7720102'].includes(m.major_code) && (
+                          <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                            Mới TT 74/2026
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-slate-400">
                       {m.category}
@@ -203,6 +221,30 @@ export const AdminMajorsManagementPage: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination / Limit Selector */}
+        <div className="p-2.5 bg-slate-950 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 border-t border-slate-800 gap-2">
+          <span>
+            Đang hiển thị {Math.min(displayLimit, filtered.length)} / {filtered.length} ngành.
+          </span>
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[10px] text-slate-400">Xem:</span>
+            {[50, 100, 200, 500].map((lim) => (
+              <button
+                key={lim}
+                type="button"
+                onClick={() => setDisplayLimit(lim)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                  displayLimit === lim
+                    ? 'bg-blue-600 text-white font-bold'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {lim === 500 ? `Tất cả (${filtered.length})` : lim}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

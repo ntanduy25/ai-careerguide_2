@@ -1,8 +1,8 @@
 import { getActiveCircular, setActiveCircular, useActiveCircular, DEFAULT_MOET_CIRCULAR } from '../../constants/regulations';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  UploadCloud,
+  Database,
   FileSpreadsheet,
   FileText,
   Search,
@@ -18,6 +18,9 @@ import {
   Eye,
   Filter,
   ExternalLink,
+  Download,
+  Upload,
+  BookOpen,
 } from 'lucide-react';
 import { taxonomyService, adminService } from '../../services/careerServices';
 import { MajorItem } from '../../data/defaultTaxonomy';
@@ -26,23 +29,14 @@ export const AdminIngestionPage: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'STREAM_A' | 'STREAM_B'>('STREAM_A');
 
-  // Stream A states
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isAiScanning, setIsAiScanning] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [scanStep, setScanStep] = useState('');
-  const [scannedResults, setScannedResults] = useState<{
-    document_title: string;
-    total_pages: number;
-    total_majors: number;
-    confidence_score: number;
-    majors: MajorItem[];
-  } | null>(null);
+  // Stream A states - Direct Database & Taxonomy Management
+  const [majorsList, setMajorsList] = useState<MajorItem[]>([]);
+  const [documentTitle, setDocumentTitle] = useState<string>('');
   const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
-  // Search & Filter for Extracted Majors
+  // Search & Filter
   const [searchFilter, setSearchFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [displayLimit, setDisplayLimit] = useState<number>(50);
@@ -59,119 +53,33 @@ export const AdminIngestionPage: React.FC = () => {
   const sampleMajors = [
     { code: '7480201', name: 'Công nghệ thông tin' },
     { code: '7480101', name: 'Khoa học máy tính' },
-    { code: '7480103', name: 'Kỹ thuật phần mềm' },
+    { code: '7480107', name: 'Trí tuệ nhân tạo' },
+    { code: '7440180', name: 'Thiết kế vi mạch bán dẫn' },
     { code: '7340101', name: 'Quản trị kinh doanh' },
-    { code: '7340201', name: 'Tài chính - Ngân hàng' },
+    { code: '7340205', name: 'Công nghệ tài chính (Fintech)' },
     { code: '7520216', name: 'Kỹ thuật điều khiển & tự động hóa' },
   ];
 
-  // Drag and Drop handlers for PDF / Excel
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isDragging) setIsDragging(true);
-  };
+  // Load published/active majors directly from database/seed on mount
+  useEffect(() => {
+    loadTaxonomy();
+  }, [activeCircular]);
 
-  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsDragging(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      if (ext === 'pdf' || ext === 'xlsx' || ext === 'xls') {
-        setSelectedFile(file);
-        handleStartAiScan(file);
-      } else {
-        alert('Hệ thống chỉ hỗ trợ tệp định dạng .pdf, .xlsx hoặc .xls');
-      }
-    }
-  };
-
-  // AI Scanner Execution
-  const handleStartAiScan = async (fileToScan: File | null = selectedFile) => {
-    setIsAiScanning(true);
-    setScanProgress(10);
-    setScanStep('Đang khởi tạo LlamaIndex PDF Reader & kiểm tra chữ ký số SHA-256...');
-    setPublishSuccess(null);
-
-    try {
-      // Auto-scan file name for circular number
-      if (fileToScan?.name) {
-        const matchName = fileToScan.name.match(/(?:Thông\s*tư|TT)?\s*(\d{1,3}[\/-]\d{4})(?:\/TT-BGDĐT)?/i);
-        if (matchName) {
-          const detected = matchName[1].replace('-', '/');
-          const newCirc = `Thông tư ${detected}/TT-BGDĐT`;
-          setActiveCircular(newCirc);
-        }
-      }
-
-      setTimeout(() => {
-        setScanProgress(35);
-        setScanStep('AI Vision đang quét từng trang scan bitmap & bóc tách cấu trúc bảng biểu Phụ lục I/II...');
-      }, 500);
-
-      setTimeout(() => {
-        setScanProgress(65);
-        setScanStep('Nhận diện các mã ngành cấp IV & chuẩn hóa tổ hợp môn xét tuyển (A00, A01, D01, B00...)...');
-      }, 1100);
-
-      setTimeout(() => {
-        setScanProgress(90);
-        setScanStep('Mô hình hóa vector Holland RIASEC & cập nhật các ngành chiến lược mới (Trí tuệ nhân tạo, Bán dẫn, Fintech)...');
-      }, 1600);
-
-      const result = await taxonomyService.aiScanMoetDocument(fileToScan);
-
-      if (result?.document_title) {
-        const matchTitle = result.document_title.match(/(?:Thông\s*tư|TT)?\s*(\d{1,3}[\/-]\d{4})(?:\/TT-BGDĐT)?/i);
-        if (matchTitle) {
-          const detected = matchTitle[1].replace('-', '/');
-          const newCirc = `Thông tư ${detected}/TT-BGDĐT`;
-          setActiveCircular(newCirc);
-        }
-      }
-
-      setTimeout(() => {
-        setScanProgress(100);
-        setIsAiScanning(false);
-        setScannedResults(result);
-      }, 2000);
-    } catch (err: any) {
-      setIsAiScanning(false);
-      alert('Lỗi trong quá trình quét văn bản: ' + (err.message || 'Không thể đọc tệp PDF.'));
-    }
-  };
-
-  const handleUseOfficialCircularPreset = () => {
-    setSelectedFile(null);
-    setActiveCircular(DEFAULT_MOET_CIRCULAR);
-    handleStartAiScan(null);
+  const loadTaxonomy = async () => {
+    const list = await taxonomyService.fetchMajors();
+    setMajorsList(list);
+    setDocumentTitle(`${activeCircular} (Quy định Danh mục ngành đào tạo giáo dục đại học cấp IV)`);
   };
 
   const handlePublishAllToTaxonomy = async () => {
-    if (!scannedResults) return;
+    if (majorsList.length === 0) return;
     setIsPublishing(true);
     try {
-      await taxonomyService.publishExtractedMajors(scannedResults.majors, scannedResults.document_title);
+      const res = await taxonomyService.publishExtractedMajors(majorsList, activeCircular);
       setPublishSuccess(
-        `Đã lưu vĩnh viễn thành công toàn bộ ${scannedResults.majors.length} ngành học từ ${scannedResults.document_title} vào Cơ sở dữ liệu hệ thống (PostgreSQL). Kể từ bây giờ toàn bộ hệ thống sẽ tự động nạp từ CSDL, không cần đọc lại tệp PDF!`
+        `Đã lưu vĩnh viễn thành công toàn bộ ${majorsList.length} ngành học từ ${activeCircular} vào Cơ sở dữ liệu hệ thống (PostgreSQL). Toàn bộ hệ thống tự động nạp từ CSDL!`
       );
+      setTimeout(() => setPublishSuccess(null), 8000);
     } catch (err: any) {
       alert('Lỗi khi xuất bản: ' + err.message);
     } finally {
@@ -179,13 +87,42 @@ export const AdminIngestionPage: React.FC = () => {
     }
   };
 
-  const handleUseTT74Preset = () => {
-    setSelectedFile(null);
-    const tt74Circ = 'Thông tư 74/2026/TT-BGDĐT';
-    setActiveCircular(tt74Circ);
-    // Create a mock File object with name matching TT74
-    const mockFile = new File([''], '74-bgddt.signed.pdf', { type: 'application/pdf' });
-    handleStartAiScan(mockFile);
+  // Direct file import (JSON format) without needing AI Vision
+  const handleImportJsonFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const content = event.target?.result as string;
+          const parsed = JSON.parse(content);
+          const rawItems: MajorItem[] = Array.isArray(parsed)
+            ? parsed
+            : parsed.majors || [];
+          if (rawItems.length > 0) {
+            setMajorsList(rawItems);
+            setActionNotice(`Đã nạp thành công ${rawItems.length} ngành từ tệp ${file.name}! Nhấn 'Lưu & Đồng Bộ' để ghi vào CSDL.`);
+            setTimeout(() => setActionNotice(null), 6000);
+          } else {
+            alert('Tệp JSON không chứa danh sách ngành hợp lệ.');
+          }
+        } catch (err: any) {
+          alert('Không thể đọc tệp JSON: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  // Direct export to JSON
+  const handleExportJson = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(majorsList, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `danh_muc_nganh_${activeCircular.replace(/[\/\s]/g, '_')}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   const handleTriggerDiscovery = async (e: React.FormEvent) => {
@@ -195,7 +132,7 @@ export const AdminIngestionPage: React.FC = () => {
     setDiscoverySuccess(null);
 
     try {
-      const res = await adminService.triggerStreamBDiscovery(majorCode, customQuery);
+      await adminService.triggerStreamBDiscovery(majorCode, customQuery);
       setDiscoverySuccess(`Đã thu thập lộ trình cho mã ngành ${majorCode} từ cổng đào tạo đại học và đưa vào Staging.`);
     } catch (err: any) {
       setDiscoveryError(err.message || 'Không tìm thấy tài liệu phù hợp từ các domain học thuật trong whitelist.');
@@ -205,20 +142,17 @@ export const AdminIngestionPage: React.FC = () => {
   };
 
   // Filter scanned results
-  const filteredScannedMajors = scannedResults
-    ? scannedResults.majors.filter((m) => {
-        const matchesCategory = categoryFilter === 'ALL' || m.category === categoryFilter;
-        const matchesSearch =
-          m.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
-          m.major_code.includes(searchFilter) ||
-          m.blocks.some((b) => b.toLowerCase().includes(searchFilter.toLowerCase()));
-        return matchesCategory && matchesSearch;
-      })
-    : [];
+  const filteredMajors = majorsList.filter((m) => {
+    const matchesCategory = categoryFilter === 'ALL' || m.category === categoryFilter;
+    const term = searchFilter.toLowerCase();
+    const matchesSearch =
+      m.name.toLowerCase().includes(term) ||
+      m.major_code.includes(term) ||
+      (m.blocks && m.blocks.some((b) => b.toLowerCase().includes(term)));
+    return matchesCategory && matchesSearch;
+  });
 
-  const uniqueCategories = scannedResults
-    ? ['ALL', ...Array.from(new Set(scannedResults.majors.map((m) => m.category)))]
-    : [];
+  const uniqueCategories = ['ALL', ...Array.from(new Set(majorsList.map((m) => m.category)))];
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
@@ -226,14 +160,14 @@ export const AdminIngestionPage: React.FC = () => {
       <div className="bg-slate-900 rounded-lg p-5 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <div className="w-9 h-9 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-            <UploadCloud className="w-5 h-5" />
+            <Database className="w-5 h-5" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-white">
-              Nạp Tri Thức 2 Luồng & Quét Văn Bản Thông Tư (Two-Stream Ingestion)
+              Quản Trị Danh Mục Ngành Cấp IV & Nạp Tri Thức Lộ Trình
             </h1>
             <p className="text-xs text-slate-400">
-              Stream A: Nạp Thông tư Bộ GD&ĐT (PDF/Excel) &bull; Stream B: Khám phá Lộ trình Đại học (Tavily Web Search)
+              Stream A: Cơ sở dữ liệu 435 ngành Cấp IV ({activeCircular}) &bull; Stream B: Khám phá lộ trình đại học
             </p>
           </div>
         </div>
@@ -257,8 +191,8 @@ export const AdminIngestionPage: React.FC = () => {
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
           }`}
         >
-          <FileText className="w-4 h-4" />
-          <span>Luồng 1: Stream A – Quét File PDF Thông Tư Bộ GD&ĐT</span>
+          <Database className="w-4 h-4" />
+          <span>Luồng 1: Stream A – CSDL Danh Mục Ngành Cấp IV (TT 74/2026)</span>
         </button>
 
         <button
@@ -274,7 +208,7 @@ export const AdminIngestionPage: React.FC = () => {
         </button>
       </div>
 
-      {/* STREAM A: AI PDF Circular Ingestion */}
+      {/* STREAM A: Direct Database Taxonomy Management */}
       {activeTab === 'STREAM_A' && (
         <div className="space-y-4">
           {/* Active Circular Management Banner */}
@@ -296,7 +230,7 @@ export const AdminIngestionPage: React.FC = () => {
                 type="text"
                 value={circularInput}
                 onChange={(e) => setCircularInput(e.target.value)}
-                placeholder="VD: Thông tư 15/2024/TT-BGDĐT"
+                placeholder="VD: Thông tư 74/2026/TT-BGDĐT"
                 className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 flex-1 sm:w-60"
               />
               <button
@@ -314,156 +248,84 @@ export const AdminIngestionPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Upload Card */}
+          {/* CSDL Summary & Action Toolbar */}
           <div className="bg-slate-900 rounded-lg p-5 border border-slate-800 space-y-4">
-            <div>
-              <h2 className="text-sm font-bold text-white flex items-center space-x-2">
-                <span>Tải Lên Tệp PDF / Excel Thông Tư Danh Mục Của Bộ GD&ĐT</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono">
-                  LlamaIndex + Structured Output
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Hệ thống tự động đọc từng trang tài liệu, trích xuất mã ngành cấp IV (7xxxxxx), tên ngành, tổ hợp môn xét tuyển (A00, A01, D01...) và vector sở thích Holland RIASEC.
-              </p>
-            </div>
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-white flex items-center space-x-2">
+                  <Database className="w-4 h-4 text-emerald-400" />
+                  <span>Cơ Sở Dữ Liệu Ngành Cấp IV – Lưu Trữ Vĩnh Viễn</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                    PostgreSQL &bull; Zero Latency
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Dữ liệu đã trích xuất hoàn chỉnh trực tiếp từ Phụ lục I Thông tư 74/2026/TT-BGDĐT. Toàn bộ hệ thống tự nạp từ CSDL, không phụ thuộc vào đọc/quét file bằng AI.
+                </p>
+              </div>
 
-            {/* Dropzone & Quick Preset */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
-              {/* File Dropzone */}
-              <div
-                onDragOver={handleDragOver}
-                onDragEnter={handleDragEnter}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={`md:col-span-2 border-2 border-dashed rounded-lg p-6 text-center flex flex-col items-center justify-center transition-all duration-200 cursor-pointer ${
-                  isDragging
-                    ? 'border-blue-500 bg-blue-500/10 ring-4 ring-blue-500/20 scale-[1.01]'
-                    : 'border-slate-700 hover:border-blue-500/70 bg-slate-950/40'
-                }`}
-              >
-                <input
-                  type="file"
-                  id="pdf_file_input"
-                  accept=".pdf,.xlsx,.xls"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      const file = e.target.files[0];
-                      setSelectedFile(file);
-                      handleStartAiScan(file);
-                    }
-                  }}
-                />
-                <label
-                  htmlFor="pdf_file_input"
-                  className="cursor-pointer flex flex-col items-center space-y-2 w-full"
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isPublishing}
+                  onClick={handlePublishAllToTaxonomy}
+                  className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors flex items-center space-x-1.5"
                 >
-                  <div className={`w-12 h-12 rounded-lg border flex items-center justify-center transition-transform ${
-                    isDragging
-                      ? 'bg-blue-600 text-white border-blue-400 scale-110'
-                      : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                  }`}>
-                    <UploadCloud className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      {isDragging
-                        ? 'Thả tệp PDF / Excel vào đây để quét tự động ngay'
-                        : selectedFile
-                        ? selectedFile.name
-                        : 'Kéo thả hoặc nhấp để chọn tệp PDF / Excel từ máy tính'}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {selectedFile
-                        ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB • Sẵn sàng quét tự động`
-                        : 'Hỗ trợ định dạng: .pdf, .xlsx, .xls (Tối đa 50MB)'}
-                    </p>
-                  </div>
+                  <Check className="w-4 h-4" />
+                  <span>{isPublishing ? 'Đang Lưu...' : `Lưu & Đồng Bộ CSDL (${majorsList.length} Ngành)`}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs border border-slate-700 flex items-center space-x-1.5 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Xuất JSON</span>
+                </button>
+
+                <label className="px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs border border-slate-700 flex items-center space-x-1.5 cursor-pointer transition-colors">
+                  <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Nhập JSON</span>
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={handleImportJsonFile}
+                  />
                 </label>
-
-                {selectedFile && (
-                  <div className="mt-3 flex items-center space-x-2">
-                    <button
-                      type="button"
-                      disabled={isAiScanning}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStartAiScan(selectedFile);
-                      }}
-                      className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs shadow-xs transition-colors flex items-center space-x-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>{isAiScanning ? 'Đang Quét AI...' : 'Bắt Đầu Quét File Đã Chọn'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedFile(null);
-                      }}
-                      className="px-3 py-2 rounded-md bg-slate-800 text-slate-400 text-xs hover:text-slate-200"
-                    >
-                      Bỏ chọn
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Instant Preset Options */}
-              <div className="bg-slate-950/60 rounded-lg p-5 border border-slate-800 flex flex-col justify-between space-y-3">
-                <div className="space-y-2">
-                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold">
-                    <Sparkles className="w-3 h-3" />
-                    <span>Quy Định Mới Nhất (Đầy Đủ 435 Ngành Cấp IV)</span>
-                  </span>
-                  <h3 className="text-xs font-bold text-white flex items-center justify-between">
-                    <span>Thông Tư 74/2026/TT-BGDĐT</span>
-                    <span className="text-[10px] text-emerald-400 font-normal">Thay thế TT09</span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Bổ sung Trí tuệ nhân tạo (AI), Thiết kế vi mạch bán dẫn, An ninh mạng, Fintech, Nông nghiệp công nghệ cao.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    disabled={isAiScanning}
-                    onClick={handleUseTT74Preset}
-                    className="w-full py-2 px-3 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center space-x-1.5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>{isAiScanning ? 'Đang Xử Lý...' : 'Nạp Ngay Thông Tư 74/2026 (Đầy Đủ 435 Ngành)'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isAiScanning}
-                    onClick={handleUseOfficialCircularPreset}
-                    className="w-full py-1.5 px-3 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium transition-colors flex items-center justify-center space-x-1"
-                  >
-                    <span>Văn bản cũ: Thông Tư 09/2022</span>
-                  </button>
-                </div>
               </div>
             </div>
 
-            {/* AI Progress Bar */}
-            {isAiScanning && (
-              <div className="p-4 rounded-md bg-blue-950/30 border border-blue-500/30 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-blue-300 flex items-center space-x-2">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>{scanStep}</span>
-                  </span>
-                  <span className="font-mono text-blue-400 font-bold">{scanProgress}%</span>
-                </div>
-                <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-300 rounded-full"
-                    style={{ width: `${scanProgress}%` }}
-                  ></div>
-                </div>
+            {/* 4 Stat Badges */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">Tổng số ngành cấp IV</span>
+                <span className="text-lg font-bold text-white font-mono">{majorsList.length}</span>
+                <span className="text-[10px] text-emerald-400 block mt-0.5">Đầy đủ 100% Phụ lục I</span>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">Lĩnh vực đào tạo</span>
+                <span className="text-lg font-bold text-blue-300 font-mono">{uniqueCategories.length - 1}</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">Khối ngành đại học</span>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">Trạng thái lưu trữ</span>
+                <span className="text-xs font-bold text-emerald-400 block mt-1">CSDL Sẵn Sàng</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">PostgreSQL & Cache</span>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">Cơ chế tải dữ liệu</span>
+                <span className="text-xs font-bold text-blue-300 block mt-1">Trực tiếp CSDL</span>
+                <span className="text-[10px] text-emerald-400 block mt-0.5">Không đọc file qua AI</span>
+              </div>
+            </div>
+
+            {actionNotice && (
+              <div className="p-3 rounded-md bg-blue-950/40 border border-blue-500/30 text-blue-300 text-xs flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
+                <span>{actionNotice}</span>
               </div>
             )}
           </div>
@@ -475,7 +337,7 @@ export const AdminIngestionPage: React.FC = () => {
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="space-y-1.5">
                   <p className="font-bold text-sm text-emerald-200">
-                    Xuất Bản Toàn Hệ Thống Thành Công
+                    Đồng Bộ Cơ Sở Dữ Liệu Thành Công
                   </p>
                   <p className="text-slate-300 leading-relaxed">{publishSuccess}</p>
                   <div className="pt-1 flex items-center space-x-2">
@@ -499,149 +361,138 @@ export const AdminIngestionPage: React.FC = () => {
             </div>
           )}
 
-          {/* Scanned Results Preview */}
-          {scannedResults && (
-            <div className="bg-slate-900 rounded-lg p-5 border border-slate-800 space-y-4">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-4 border-b border-slate-800">
-                <div className="space-y-0.5">
-                  <div className="flex items-center space-x-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <h2 className="text-base font-bold text-white">
-                      Kết Quả Trích Xuất: {scannedResults.majors.length} Ngành Học Cấp IV
-                    </h2>
-                  </div>
-                  <p className="text-xs text-slate-400">
-                    Tài liệu: <span className="text-blue-300 font-medium">{scannedResults.document_title}</span> &bull; Độ tin cậy: <span className="text-emerald-400 font-mono font-bold">{scannedResults.confidence_score}%</span>
-                  </p>
+          {/* Majors Catalog Table */}
+          <div className="bg-slate-900 rounded-lg p-5 border border-slate-800 space-y-4">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="space-y-0.5">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <h2 className="text-base font-bold text-white">
+                    Bảng Tra Cứu Toàn Bộ {majorsList.length} Ngành Cấp IV
+                  </h2>
                 </div>
+                <p className="text-xs text-slate-400">
+                  Văn bản: <span className="text-blue-300 font-medium">{documentTitle}</span>
+                </p>
+              </div>
+            </div>
 
-                <button
-                  type="button"
-                  disabled={isPublishing}
-                  onClick={handlePublishAllToTaxonomy}
-                  className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors flex items-center space-x-1.5 shrink-0"
+            {/* Search & Filter */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Tìm theo mã (7480107...), tên ngành, tổ hợp môn..."
+                  className="w-full pl-9 pr-3 py-1.5 rounded-md bg-slate-950 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="w-full sm:w-auto px-3 py-1.5 rounded-md bg-slate-950 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>
-                    {isPublishing
-                      ? 'Đang Xuất Bản...'
-                      : `Phê Duyệt & Xuất Bản ${scannedResults.majors.length} Ngành`}
-                  </span>
-                </button>
+                  {uniqueCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat === 'ALL' ? 'Tất cả lĩnh vực đào tạo' : cat}
+                    </option>
+                  ))}
+                </select>
               </div>
+            </div>
 
-              {/* Search & Filter */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    value={searchFilter}
-                    onChange={(e) => setSearchFilter(e.target.value)}
-                    placeholder="Tìm theo mã hoặc tên ngành..."
-                    className="w-full pl-9 pr-3 py-1.5 rounded-md bg-slate-950 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2 w-full sm:w-auto">
-                  <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="w-full sm:w-auto px-3 py-1.5 rounded-md bg-slate-950 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    {uniqueCategories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat === 'ALL' ? 'Tất cả lĩnh vực đào tạo' : cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Majors Table */}
-              <div className="border border-slate-800 rounded-md overflow-hidden">
-                <div className="overflow-x-auto max-h-80">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0">
-                      <tr>
-                        <th className="py-2.5 px-3">Mã Cấp IV</th>
-                        <th className="py-2.5 px-3">Tên Ngành</th>
-                        <th className="py-2.5 px-3">Lĩnh Vực</th>
-                        <th className="py-2.5 px-3">Tổ Hợp Môn</th>
-                        <th className="py-2.5 px-3">Vector RIASEC</th>
-                        <th className="py-2.5 px-3">Trạng Thái</th>
+            {/* Table */}
+            <div className="border border-slate-800 rounded-md overflow-hidden">
+              <div className="overflow-x-auto max-h-96">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-950 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0">
+                    <tr>
+                      <th className="py-2.5 px-3">Mã Cấp IV</th>
+                      <th className="py-2.5 px-3">Tên Ngành</th>
+                      <th className="py-2.5 px-3">Lĩnh Vực</th>
+                      <th className="py-2.5 px-3">Tổ Hợp Môn</th>
+                      <th className="py-2.5 px-3">Vector RIASEC</th>
+                      <th className="py-2.5 px-3 text-right">Lộ Trình</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-sans">
+                    {filteredMajors.slice(0, displayLimit).map((m) => (
+                      <tr key={m.major_code} className="hover:bg-slate-850/40 transition-colors">
+                        <td className="py-2.5 px-3 font-mono font-bold text-blue-400">
+                          {m.major_code}
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-white">
+                          <div className="flex items-center space-x-2">
+                            <span>{m.name}</span>
+                            {['7480107', '7440180', '7480208', '7460108', '7340205', '7520217', '7620101', '7310313', '7140103', '7720102'].includes(m.major_code) && (
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                                Mới TT 74/2026
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-400">{m.category}</td>
+                        <td className="py-2.5 px-3">
+                          <div className="flex flex-wrap gap-1">
+                            {m.blocks.map((b) => (
+                              <span
+                                key={b}
+                                className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 text-[10px] font-mono"
+                              >
+                                {b}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[10px] text-slate-400">
+                          R:{m.riasec.R} I:{m.riasec.I} A:{m.riasec.A} S:{m.riasec.S} E:{m.riasec.E} C:{m.riasec.C}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <Link
+                            to={`/roadmap/${m.major_code}`}
+                            target="_blank"
+                            className="text-blue-400 hover:text-blue-300 text-[11px] font-medium hover:underline inline-flex items-center space-x-1"
+                          >
+                            <span>Lộ trình</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </Link>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60 font-sans">
-                      {filteredScannedMajors.slice(0, displayLimit).map((m) => (
-                        <tr key={m.major_code} className="hover:bg-slate-850/40 transition-colors">
-                          <td className="py-2.5 px-3 font-mono font-bold text-blue-400">
-                            {m.major_code}
-                          </td>
-                          <td className="py-2.5 px-3 font-semibold text-white">
-                            <div className="flex items-center space-x-2">
-                              <span>{m.name}</span>
-                              {['7480107', '7440180', '7480208', '7460108', '7340205', '7520217', '7620101', '7310313', '7140103', '7720102'].includes(m.major_code) && (
-                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                                  Mới TT 74/2026
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-400">{m.category}</td>
-                          <td className="py-2.5 px-3">
-                            <div className="flex flex-wrap gap-1">
-                              {m.blocks.map((b) => (
-                                <span
-                                  key={b}
-                                  className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 text-[10px] font-mono"
-                                >
-                                  {b}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 font-mono text-[10px] text-slate-400">
-                            R:{m.riasec.R} I:{m.riasec.I} A:{m.riasec.A} S:{m.riasec.S} E:{m.riasec.E} C:{m.riasec.C}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 text-[10px]">
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>Chuẩn hóa</span>
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="p-2.5 bg-slate-950 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 border-t border-slate-800 gap-2">
-                  <span>
-                    Đang hiển thị {Math.min(displayLimit, filteredScannedMajors.length)} / {filteredScannedMajors.length} ngành. Toàn bộ {filteredScannedMajors.length} ngành sẽ được lưu vào CSDL khi bấm nút Phê Duyệt.
-                  </span>
-                  <div className="flex items-center space-x-1.5">
-                    <span className="text-[10px] text-slate-400">Xem:</span>
-                    {[50, 100, 200, 500].map((lim) => (
-                      <button
-                        key={lim}
-                        type="button"
-                        onClick={() => setDisplayLimit(lim)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
-                          displayLimit === lim
-                            ? 'bg-blue-600 text-white font-bold'
-                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                        }`}
-                      >
-                        {lim === 500 ? `Tất cả (${filteredScannedMajors.length})` : lim}
-                      </button>
                     ))}
-                  </div>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination / Limit Selector */}
+              <div className="p-2.5 bg-slate-950 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 border-t border-slate-800 gap-2">
+                <span>
+                  Đang hiển thị {Math.min(displayLimit, filteredMajors.length)} / {filteredMajors.length} ngành.
+                </span>
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-[10px] text-slate-400">Xem:</span>
+                  {[50, 100, 200, 500].map((lim) => (
+                    <button
+                      key={lim}
+                      type="button"
+                      onClick={() => setDisplayLimit(lim)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                        displayLimit === lim
+                          ? 'bg-blue-600 text-white font-bold'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {lim === 500 ? `Tất cả (${filteredMajors.length})` : lim}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
