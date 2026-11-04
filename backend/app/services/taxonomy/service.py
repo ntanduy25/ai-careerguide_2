@@ -74,6 +74,7 @@ def format_major_dict(major: Major) -> Dict[str, Any]:
     return {
         "id": major.id,
         "major_code": major.major_code,
+        "raw_code": major.major_code[1:] if (major.major_code and major.major_code.startswith("7") and len(major.major_code) == 7) else major.major_code,
         "name": major.name,
         "category": getattr(major, "category", "Khác") or "Khác",
         "degree_level": major.degree_level or "Đại học",

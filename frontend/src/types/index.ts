@@ -96,6 +96,7 @@ export interface CompetencyGapItem {
 
 export interface MajorRecommendation {
   major_code: string;
+  raw_code?: string;
   major_name: string;
   category_name: string;
   overall_score: number;
@@ -146,6 +147,7 @@ export interface RecommendationHistoryItem {
 export interface SavedRoadmapItem {
   id: string;
   major_code: string;
+  raw_code?: string;
   major_name: string;
   category_name: string;
   overall_score?: number;
@@ -177,6 +179,7 @@ export interface ReferenceMaterial {
 export interface MajorRoadmap {
   id: string;
   major_code: string;
+  raw_code?: string;
   title: string;
   version: string;
   is_fallback: boolean;
@@ -201,6 +204,7 @@ export interface PersonalizedScheduleTask {
 
 export interface GuidancePersonalizationResponse {
   major_code: string;
+  raw_code?: string;
   personalization_summary: string;
   schedule: PersonalizedScheduleTask[];
   is_fallback: boolean;
@@ -297,6 +301,7 @@ export interface QAPersonaPreset {
   description: string;
   target_moet_majors: Array<{
     major_code: string;
+  raw_code?: string;
     major_name: string;
   }>;
   riasec_answers: Record<string, number>;
@@ -338,6 +343,7 @@ export interface AssessmentSubmissionResult {
 export interface MajorItem {
   id?: string;
   major_code: string;
+  raw_code?: string;
   name: string;
   category: string;
   degree_level?: string;
@@ -394,6 +400,7 @@ export interface DiagnosticTestRecord {
 // AI Explanation & AI Counselor Chat Types (FR06 & Law 91/2025 Compliance)
 export interface AIExplanationResponse {
   major_code: string;
+  raw_code?: string;
   major_name: string;
   detailed_explanation: string;
   riasec_alignment: string;

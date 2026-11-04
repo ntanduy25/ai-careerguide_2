@@ -71,6 +71,7 @@ export const TaxonomyPage: React.FC = () => {
     const matchesSearch =
       m.name.toLowerCase().includes(term) ||
       m.major_code.includes(term) ||
+      (m.raw_code && m.raw_code.includes(term)) ||
       m.blocks.some((b) => b.toLowerCase().includes(term)) ||
       m.careers.some((c) => c.toLowerCase().includes(term));
     return matchesCategory && matchesSearch;
@@ -245,6 +246,9 @@ export const TaxonomyPage: React.FC = () => {
                     </span>
                     <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                       {m.major_code}
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200" title="Mã Cấp IV Thông tư 74/2026/TT-BGDĐT">
+                      TT74: {m.raw_code || (m.major_code.startsWith('7') && m.major_code.length === 7 ? m.major_code.slice(1) : m.major_code)}
                     </span>
                     <span className="text-[11px] text-slate-500 font-medium">
                       {m.category}

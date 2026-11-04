@@ -61,6 +61,7 @@ export const AdminMajorsManagementPage: React.FC = () => {
     const matchesSearch =
       m.name.toLowerCase().includes(term) ||
       m.major_code.includes(term) ||
+      (m.raw_code && m.raw_code.includes(term)) ||
       (m.blocks && m.blocks.some((b) => b.toLowerCase().includes(term)));
     return matchesCat && matchesSearch;
   });
@@ -158,7 +159,7 @@ export const AdminMajorsManagementPage: React.FC = () => {
             <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800 sticky top-0">
               <tr>
                 <th className="px-3 py-3 font-semibold text-center w-14">STT</th>
-                <th className="px-4 py-3 font-semibold">Mã Cấp IV</th>
+                <th className="px-4 py-3 font-semibold">Mã Ngành (ĐH / TT74)</th>
                 <th className="px-4 py-3 font-semibold">Tên Ngành Đào Tạo</th>
                 <th className="px-4 py-3 font-semibold">Lĩnh Vực</th>
                 <th className="px-4 py-3 font-semibold">Tổ Hợp Xét Tuyển</th>
@@ -179,8 +180,13 @@ export const AdminMajorsManagementPage: React.FC = () => {
                     <td className="px-3 py-3 text-center font-mono font-semibold text-slate-400">
                       {idx + 1}
                     </td>
-                    <td className="px-4 py-3 font-mono font-semibold text-blue-400">
-                      {m.major_code}
+                    <td className="px-4 py-3">
+                      <div className="font-mono font-semibold text-blue-400">
+                        {m.major_code}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        TT74: <span className="text-slate-300 font-semibold">{m.raw_code || (m.major_code.startsWith('7') && m.major_code.length === 7 ? m.major_code.slice(1) : m.major_code)}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-semibold text-white">
                       <div className="flex items-center space-x-2">

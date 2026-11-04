@@ -27,7 +27,7 @@ class CognitiveAttributesSchema(BaseModel):
 
 class MajorBase(BaseModel):
     major_code: str = Field(
-        min_length=7, max_length=20,
+        min_length=6, max_length=20,
         description="Official Level-IV major code from MOET Circular 09/2022/TT-BGDĐT"
     )
     name: str = Field(min_length=2, max_length=255)
@@ -94,6 +94,7 @@ class SkillSummary(BaseModel):
 class MajorItemResponse(BaseModel):
     id: Optional[uuid.UUID] = None
     major_code: str
+    raw_code: Optional[str] = None
     name: str
     category: str = "Kh?c"
     degree_level: str = "??i h?c"
