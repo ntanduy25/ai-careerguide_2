@@ -1631,11 +1631,11 @@ export const taxonomyService = {
   _cachedMajors: null as MajorItem[] | null,
 
   async fetchMajors(forceRefresh = false): Promise<MajorItem[]> {
-    if (!forceRefresh && this._cachedMajors && this._cachedMajors.length > 0) {
+    if (!forceRefresh && this._cachedMajors && this._cachedMajors.length >= 400) {
       return this._cachedMajors;
     }
     try {
-      const data = await apiRequest<MajorItem[]>('/taxonomy/majors?limit=250');
+      const data = await apiRequest<MajorItem[]>('/taxonomy/majors?limit=1000');
       if (Array.isArray(data) && data.length > 0) {
         this._cachedMajors = data;
         localStorage.setItem('careerguide_published_majors', JSON.stringify(data));
@@ -1648,14 +1648,14 @@ export const taxonomyService = {
   },
 
   getMajors(): MajorItem[] {
-    if (this._cachedMajors && this._cachedMajors.length >= 100) {
+    if (this._cachedMajors && this._cachedMajors.length >= 400) {
       return this._cachedMajors;
     }
     const saved = localStorage.getItem('careerguide_published_majors');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 100) {
+        if (Array.isArray(parsed) && parsed.length >= 400) {
           this._cachedMajors = parsed;
           return parsed;
         }
@@ -1665,8 +1665,8 @@ export const taxonomyService = {
     }
     const currentCircular = localStorage.getItem('careerguide_active_circular') || '';
     if (currentCircular.includes('09')) {
-      this._cachedMajors = MOET_108_MAJORS;
-      return MOET_108_MAJORS;
+      this._cachedMajors = MOET_TT74_MAJORS;
+      return MOET_TT74_MAJORS;
     }
     this._cachedMajors = MOET_TT74_MAJORS;
     return MOET_TT74_MAJORS;
@@ -1728,15 +1728,15 @@ export const taxonomyService = {
   },
 
   resetToInitial(): MajorItem[] {
-    this._cachedMajors = MOET_108_MAJORS;
-    localStorage.setItem('careerguide_published_majors', JSON.stringify(MOET_108_MAJORS));
-    localStorage.setItem('careerguide_active_circular', 'Thông tư 09/2022/TT-BGDĐT');
+    this._cachedMajors = MOET_TT74_MAJORS;
+    localStorage.setItem('careerguide_published_majors', JSON.stringify(MOET_TT74_MAJORS));
+    localStorage.setItem('careerguide_active_circular', 'Thông tư 74/2026/TT-BGDĐT');
     window.dispatchEvent(
       new CustomEvent('careerguide_taxonomy_updated', {
-        detail: { count: MOET_108_MAJORS.length },
+        detail: { count: MOET_TT74_MAJORS.length },
       })
     );
-    return MOET_108_MAJORS;
+    return MOET_TT74_MAJORS;
   },
 
   async aiScanMoetDocument(file: File | null): Promise<{

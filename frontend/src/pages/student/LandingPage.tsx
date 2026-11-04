@@ -129,8 +129,8 @@ export const LandingPage: React.FC = () => {
             {/* Metrics */}
             <div className="pt-8 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-6 text-left">
               <div>
-                <p className="text-2xl font-bold text-slate-900">108</p>
-                <p className="text-xs text-slate-500 mt-0.5">Mã ngành Cấp IV Bộ GD&ĐT</p>
+                <p className="text-2xl font-bold text-slate-900">435</p>
+                <p className="text-xs text-slate-500 mt-0.5">Ngành Cấp IV (TT 74/2026)</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-900">3 Trụ cột</p>

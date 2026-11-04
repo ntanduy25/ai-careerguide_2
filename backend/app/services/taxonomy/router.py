@@ -19,7 +19,7 @@ router = APIRouter(prefix="/taxonomy", tags=["Taxonomy & Pure Guidance Catalog"]
 async def get_majors(
     search: Optional[str] = Query(None, description="Search by major code or name"),
     category: Optional[str] = Query(None, description="Filter by broad field/category"),
-    limit: int = Query(500, ge=1, le=1000),
+    limit: int = Query(1000, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db)
 ):

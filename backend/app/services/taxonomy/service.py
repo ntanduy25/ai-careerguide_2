@@ -94,7 +94,7 @@ async def list_majors(
     db: AsyncSession,
     search: Optional[str] = None,
     category: Optional[str] = None,
-    limit: int = 250,
+    limit: int = 1000,
     offset: int = 0
 ) -> List[Dict[str, Any]]:
     """

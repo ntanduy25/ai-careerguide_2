@@ -66,7 +66,7 @@ export const AdminIngestionPage: React.FC = () => {
   }, [activeCircular]);
 
   const loadTaxonomy = async () => {
-    const list = await taxonomyService.fetchMajors();
+    const list = await taxonomyService.fetchMajors(true);
     setMajorsList(list);
     setDocumentTitle(`${activeCircular} (Quy định Danh mục ngành đào tạo giáo dục đại học cấp IV)`);
   };
@@ -412,6 +412,7 @@ export const AdminIngestionPage: React.FC = () => {
                 <table className="w-full text-left text-xs text-slate-300">
                   <thead className="bg-slate-950 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0">
                     <tr>
+                      <th className="py-2.5 px-3 text-center w-14">STT</th>
                       <th className="py-2.5 px-3">Mã Cấp IV</th>
                       <th className="py-2.5 px-3">Tên Ngành</th>
                       <th className="py-2.5 px-3">Lĩnh Vực</th>
@@ -421,8 +422,11 @@ export const AdminIngestionPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-sans">
-                    {filteredMajors.slice(0, displayLimit).map((m) => (
+                    {filteredMajors.slice(0, displayLimit).map((m, idx) => (
                       <tr key={m.major_code} className="hover:bg-slate-850/40 transition-colors">
+                        <td className="py-2.5 px-3 text-center font-mono font-semibold text-slate-400">
+                          {idx + 1}
+                        </td>
                         <td className="py-2.5 px-3 font-mono font-bold text-blue-400">
                           {m.major_code}
                         </td>

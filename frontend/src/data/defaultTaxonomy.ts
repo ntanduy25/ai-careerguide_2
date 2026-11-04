@@ -136,14 +136,14 @@ export const getStoredPublishedMajors = (): MajorItem[] => {
     const raw = localStorage.getItem('careerguide_published_majors');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length >= 100) {
+      if (Array.isArray(parsed) && parsed.length >= 400) {
         return parsed;
       }
     }
   } catch (err) {
     // ignore
   }
-  return MOET_108_MAJORS;
+  return MOET_TT74_MAJORS;
 };
 
 // Khởi tạo danh mục MOET chính thức từ Thông tư 09/2022/TT-BGDĐT

@@ -45,7 +45,7 @@ export const TaxonomyPage: React.FC = () => {
   }, []);
 
   const loadMajors = async () => {
-    const list = await taxonomyService.fetchMajors();
+    const list = await taxonomyService.fetchMajors(true);
     setMajorsList(list);
   };
 
@@ -230,7 +230,7 @@ export const TaxonomyPage: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredMajors.map((m) => (
+          {filteredMajors.map((m, idx) => (
           <div
             key={m.major_code}
             className="bg-white rounded-lg p-5 border border-slate-200 shadow-sm hover:border-slate-300 transition-colors space-y-4 flex flex-col justify-between"
@@ -240,6 +240,9 @@ export const TaxonomyPage: React.FC = () => {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="flex items-center space-x-2">
+                    <span className="font-mono text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                      STT: {idx + 1}
+                    </span>
                     <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                       {m.major_code}
                     </span>

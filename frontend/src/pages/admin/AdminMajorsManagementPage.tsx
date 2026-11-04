@@ -31,7 +31,7 @@ export const AdminMajorsManagementPage: React.FC = () => {
   }, []);
 
   const loadMajors = async () => {
-    const list = await taxonomyService.fetchMajors();
+    const list = await taxonomyService.fetchMajors(true);
     setMajors(list);
   };
 
@@ -157,6 +157,7 @@ export const AdminMajorsManagementPage: React.FC = () => {
           <table className="w-full text-left text-xs text-slate-300">
             <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800 sticky top-0">
               <tr>
+                <th className="px-3 py-3 font-semibold text-center w-14">STT</th>
                 <th className="px-4 py-3 font-semibold">Mã Cấp IV</th>
                 <th className="px-4 py-3 font-semibold">Tên Ngành Đào Tạo</th>
                 <th className="px-4 py-3 font-semibold">Lĩnh Vực</th>
@@ -168,13 +169,16 @@ export const AdminMajorsManagementPage: React.FC = () => {
             <tbody className="divide-y divide-slate-800/60 font-medium">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500 text-xs">
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500 text-xs">
                     Không tìm thấy ngành đào tạo nào phù hợp.
                   </td>
                 </tr>
               ) : (
-                filtered.slice(0, displayLimit).map((m) => (
+                filtered.slice(0, displayLimit).map((m, idx) => (
                   <tr key={m.major_code} className="hover:bg-slate-850/40 transition-colors">
+                    <td className="px-3 py-3 text-center font-mono font-semibold text-slate-400">
+                      {idx + 1}
+                    </td>
                     <td className="px-4 py-3 font-mono font-semibold text-blue-400">
                       {m.major_code}
                     </td>
