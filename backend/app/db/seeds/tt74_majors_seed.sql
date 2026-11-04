@@ -1,5 +1,6 @@
 -- BỘ GIÁO DỤC VÀ ĐÀO TẠO - THÔNG TƯ 74/2026/TT-BGDĐT
 -- DANH MỤC 435 NGÀNH ĐÀO TẠO ĐẠI HỌC CẤP IV (ÁP DỤNG TUYỂN SINH TỪ 2027)
+-- TRÍCH XUẤT TỪ SHEET: 'Danh mục 435 ngành'
 
 BEGIN;
 
