@@ -722,7 +722,7 @@ def build_deterministic_chat_response(
             f"- Chuyên viên kỹ thuật và phát triển giải pháp chuyên môn\n"
             f"- Chuyên viên nghiên cứu, phân tích dữ liệu và tư vấn nghiệp vụ\n"
             f"- Quản lý dự án chuyên ngành hoặc khởi nghiệp sáng tạo\n\n"
-            f"Bạn có thể xem chi tiết danh sách vị trí việc làm và mức độ phát triển thị trường tại trang Danh mục 108 ngành."
+            f"Bạn có thể xem chi tiết danh sách vị trí việc làm và mức độ phát triển thị trường tại trang Danh mục 435 ngành."
         )
         followups = [
             f"Tại sao ngành {major_name or ''} lại phù hợp với sở thích của em?",
@@ -975,7 +975,7 @@ async def chat_with_career_counselor(
             resp.reply = (
                 "> [!NOTE]\n"
                 "> **Thông báo kết nối AI:** Nhà cung cấp API (`api.xah.io`) thông báo **Hết số dư tài khoản (Insufficient balance)**. "
-                "Hệ thống đang tự động giải đáp cho bạn dựa trên **Cơ sở tri thức chuẩn hóa 108 ngành Bộ GD&ĐT & Cây nghề nghiệp Phoenix Ho**.\n\n"
+                "Hệ thống đang tự động giải đáp cho bạn dựa trên **Cơ sở tri thức chuẩn hóa 435 ngành Bộ GD&ĐT & Cây nghề nghiệp Phoenix Ho**.\n\n"
                 + resp.reply
             )
         return resp

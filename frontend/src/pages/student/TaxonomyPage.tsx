@@ -90,7 +90,7 @@ export const TaxonomyPage: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            Hệ thống 108 ngành đào tạo đại học chính quy bám sát khung phân loại quốc gia và cây nghề nghiệp Phoenix Ho.
+            Hệ thống 435 ngành đào tạo đại học chính quy bám sát khung phân loại quốc gia và cây nghề nghiệp Phoenix Ho.
           </p>
         </div>
 
@@ -115,7 +115,7 @@ export const TaxonomyPage: React.FC = () => {
           <div className="flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-amber-500"></span>
             <span>
-              Hệ thống đang ở chế độ xem mẫu (6 ngành). Để xem toàn bộ 108 ngành theo {getActiveCircular()}, vui lòng đồng bộ dữ liệu.
+              Hệ thống đang ở chế độ xem mẫu (6 ngành). Để xem toàn bộ 435 ngành theo {getActiveCircular()}, vui lòng đồng bộ dữ liệu.
             </span>
           </div>
           <button
@@ -125,7 +125,7 @@ export const TaxonomyPage: React.FC = () => {
             }}
             className="px-3 py-1 rounded-md bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-semibold text-xs shrink-0"
           >
-            Đồng bộ 108 ngành đầy đủ
+            Đồng bộ 435 ngành đầy đủ
           </button>
         </div>
       )}
@@ -216,7 +216,7 @@ export const TaxonomyPage: React.FC = () => {
       {filteredMajors.length === 0 ? (
         <div className="bg-white rounded-lg p-10 border border-slate-200 text-center space-y-3">
           <p className="text-sm font-bold text-slate-800">Không tìm thấy ngành đào tạo nào phù hợp</p>
-          <p className="text-xs text-slate-500">Hãy thử nhập từ khóa tìm kiếm khác hoặc xóa bộ lọc để hiển thị toàn bộ 108 ngành.</p>
+          <p className="text-xs text-slate-500">Hãy thử nhập từ khóa tìm kiếm khác hoặc xóa bộ lọc để hiển thị toàn bộ 435 ngành.</p>
           <button
             type="button"
             onClick={() => {

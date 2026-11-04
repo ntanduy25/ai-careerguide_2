@@ -795,7 +795,7 @@ export const GuidanceHubPage: React.FC = () => {
 
             <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
               <span className="truncate">{hasCalculatedRecommendations ? 'Đã có kết quả' : 'Chờ chạy'}</span>
-              <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded shrink-0">108 ngành</span>
+              <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded shrink-0">435 ngành</span>
             </div>
           </button>
         </div>
@@ -1418,7 +1418,7 @@ export const GuidanceHubPage: React.FC = () => {
                   Dữ Liệu Khảo Sát Đã Ghi Nhận
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Hệ thống sử dụng các thông số này để đối chiếu với 108 ngành đào tạo đại học cấp IV.
+                  Hệ thống sử dụng các thông số này để đối chiếu với 435 ngành đào tạo đại học cấp IV.
                 </p>
               </div>
 
@@ -1650,7 +1650,7 @@ export const GuidanceHubPage: React.FC = () => {
                       Chưa Đủ Dữ Liệu Để Đề Xuất Ngành Học
                     </h2>
                     <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                      Hệ thống tuân thủ nguyên tắc không suy đoán vô căn cứ. Thuật toán XAI cần dữ liệu trắc nghiệm sở thích RIASEC (45% trọng số) và nhận thức (20% trọng số) để đối chiếu chính xác với 108 ngành đại học cấp IV.
+                      Hệ thống tuân thủ nguyên tắc không suy đoán vô căn cứ. Thuật toán XAI cần dữ liệu trắc nghiệm sở thích RIASEC (45% trọng số) và nhận thức (20% trọng số) để đối chiếu chính xác với 435 ngành đại học cấp IV.
                     </p>
                   </div>
 
@@ -1686,7 +1686,7 @@ export const GuidanceHubPage: React.FC = () => {
                       Hồ Sơ Của Bạn Đã Sẵn Sàng Tính Toán
                     </h2>
                     <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                      Đối chiếu vector sở thích thực tế ({dominantTraits.length > 0 ? dominantTraits.join(', ') : 'RIASEC'}) và điểm học bạ trên toàn bộ 108 ngành đào tạo đại học cấp IV {getActiveCircular()}.
+                      Đối chiếu vector sở thích thực tế ({dominantTraits.length > 0 ? dominantTraits.join(', ') : 'RIASEC'}) và điểm học bạ trên toàn bộ 435 ngành đào tạo đại học cấp IV {getActiveCircular()}.
                     </p>
                   </div>
 

@@ -497,7 +497,7 @@ export const RoadmapDetailPage: React.FC = () => {
                     Đổi Sang Lộ Trình Ngành Khác
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Chọn ngành trong 108 ngành cấp IV của Bộ GD&ĐT
+                    Chọn ngành trong 435 ngành cấp IV của Bộ GD&ĐT
                   </p>
                 </div>
               </div>

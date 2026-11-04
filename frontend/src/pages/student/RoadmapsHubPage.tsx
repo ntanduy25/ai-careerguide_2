@@ -111,7 +111,7 @@ export const RoadmapsHubPage: React.FC = () => {
               Chưa có lộ trình nào được lưu
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-md mx-auto">
-              Bạn có thể làm bài khảo sát để nhận gợi ý ngành tương thích, hoặc chọn một ngành trong danh mục 108 ngành cấp IV để tạo lộ trình chuẩn bị ngay.
+              Bạn có thể làm bài khảo sát để nhận gợi ý ngành tương thích, hoặc chọn một ngành trong danh mục 435 ngành cấp IV để tạo lộ trình chuẩn bị ngay.
             </p>
           </div>
 
@@ -234,7 +234,7 @@ export const RoadmapsHubPage: React.FC = () => {
                     Chọn Ngành Học Để Lập Lộ Trình
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Tra cứu trong 108 ngành cấp IV {getActiveCircular()}
+                    Tra cứu trong 435 ngành cấp IV {getActiveCircular()}
                   </p>
                 </div>
               </div>

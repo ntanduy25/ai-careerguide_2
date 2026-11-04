@@ -47,7 +47,7 @@ export const Navbar: React.FC = () => {
       iconIdleBg: 'bg-indigo-50 text-indigo-600',
     },
     {
-      name: 'Danh mục 108 ngành',
+      name: 'Danh mục 435 ngành',
       path: '/taxonomy',
       icon: Compass,
       public: true,

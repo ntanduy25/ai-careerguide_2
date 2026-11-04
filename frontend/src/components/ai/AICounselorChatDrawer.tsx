@@ -40,7 +40,7 @@ Bạn muốn tìm hiểu thêm về:
   }
   return `Xin chào! Tôi là **Cố vấn AI CareerGuide** (v1.8 Tuân thủ Luật 91/2025/QH15). 
 
-Tôi được kết nối trực tiếp với ma trận 108 ngành đào tạo cấp IV và hồ sơ học tập của bạn. Hãy đặt bất kỳ câu hỏi nào về:
+Tôi được kết nối trực tiếp với ma trận 435 ngành đào tạo cấp IV và hồ sơ học tập của bạn. Hãy đặt bất kỳ câu hỏi nào về:
 - Đánh giá năng lực và sở thích của bạn phù hợp với nhóm ngành nào nhất.
 - Phân tích điểm số các khối thi (A00, A01, D01...).
 - Lộ trình tự học và khắc phục lỗ hổng kiến thức trước khi bước vào giảng đường đại học!`;

@@ -64,7 +64,7 @@ export const LandingPage: React.FC = () => {
     {
       step: '4',
       title: 'Nhận Đề xuất & Lộ trình XAI',
-      desc: 'Xem xếp hạng 108 ngành cấp IV với giải trình minh bạch, biểu đồ Radar đối sánh và lộ trình phát triển kỹ năng từng kỳ.',
+      desc: 'Xem xếp hạng 435 ngành cấp IV với giải trình minh bạch, biểu đồ Radar đối sánh và lộ trình phát triển kỹ năng từng kỳ.',
       tag: 'XAI Minh bạch',
     },
   ];
@@ -72,7 +72,7 @@ export const LandingPage: React.FC = () => {
   const standards = [
     {
       title: getActiveCircular(),
-      desc: 'Bám sát 100% danh mục giáo dục đào tạo cấp IV quốc gia với 108 ngành đại học chính quy.',
+      desc: 'Bám sát 100% danh mục giáo dục đào tạo cấp IV quốc gia với 435 ngành đại học chính quy.',
     },
     {
       title: 'Toán học Tất định 100%',
@@ -122,7 +122,7 @@ export const LandingPage: React.FC = () => {
                 className="inline-flex items-center justify-center space-x-2 px-6 py-3 rounded-lg text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-sm transition-colors"
               >
                 <Compass className="w-4 h-4 text-slate-500" />
-                <span>Tra cứu 108 ngành cấp IV</span>
+                <span>Tra cứu 435 ngành cấp IV</span>
               </Link>
             </div>
 
