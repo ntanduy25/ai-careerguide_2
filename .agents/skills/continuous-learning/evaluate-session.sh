@@ -32,24 +32,15 @@ MIN_SESSION_LENGTH=10
 
 # Load config if exists
 if [ -f "$CONFIG_FILE" ]; then
-  if ! command -v jq &>/dev/null; then
-    echo "[ContinuousLearning] jq is required to parse config.json but not installed, using defaults" >&2
-  else
-    MIN_SESSION_LENGTH=$(jq -r '.min_session_length // 10' "$CONFIG_FILE")
-    LEARNED_SKILLS_PATH=$(jq -r '.learned_skills_path // "~/.claude/skills/learned/"' "$CONFIG_FILE" | sed "s|~|$HOME|")
-  fi
+  MIN_SESSION_LENGTH=$(jq -r '.min_session_length // 10' "$CONFIG_FILE")
+  LEARNED_SKILLS_PATH=$(jq -r '.learned_skills_path // "~/.claude/skills/learned/"' "$CONFIG_FILE" | sed "s|~|$HOME|")
 fi
 
 # Ensure learned skills directory exists
 mkdir -p "$LEARNED_SKILLS_PATH"
 
-# Get transcript path from stdin JSON (Claude Code hook input)
-# Falls back to env var for backwards compatibility
-stdin_data=$(cat)
-transcript_path=$(echo "$stdin_data" | grep -o '"transcript_path":"[^"]*"' | head -1 | cut -d'"' -f4)
-if [ -z "$transcript_path" ]; then
-  transcript_path="${CLAUDE_TRANSCRIPT_PATH:-}"
-fi
+# Get transcript path from environment (set by Claude Code)
+transcript_path="${CLAUDE_TRANSCRIPT_PATH:-}"
 
 if [ -z "$transcript_path" ] || [ ! -f "$transcript_path" ]; then
   exit 0
