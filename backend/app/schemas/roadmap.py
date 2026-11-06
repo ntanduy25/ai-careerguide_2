@@ -16,6 +16,17 @@ class RoadmapMilestoneSchema(BaseModel):
     )
 
 
+class RoadmapWeekSchema(BaseModel):
+    """Matches FE RoadmapWeek interface directly."""
+    id: str
+    week: int
+    title: str
+    eyebrow: str
+    description: str
+    content: str
+    tasks: List[str] = Field(default_factory=list)
+
+
 class ReferenceMaterialSchema(BaseModel):
     title: str
     author_or_institution: str

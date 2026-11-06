@@ -1,5 +1,8 @@
+import logging
 import time
 import uuid
+
+logger = logging.getLogger(__name__)
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,22 +51,27 @@ async def calculate_3pillar_recommendations(
     start_time = time.perf_counter()
 
     # 1. Fetch Student Assessment Profile
-    assess_res = await db.execute(
-        select(StudentAssessment).where(StudentAssessment.user_id == user_id)
-    )
-    assessment = assess_res.scalar_one_or_none()
+    try:
+        assess_res = await db.execute(
+            select(StudentAssessment).where(StudentAssessment.user_id == user_id)
+        )
+        assessment = assess_res.scalar_one_or_none()
 
-    # 2. Fetch Student Grades & Normalized Z-Scores
-    grade_res = await db.execute(
-        select(StudentGrade).where(StudentGrade.user_id == user_id).order_by(StudentGrade.created_at.desc())
-    )
-    grade = grade_res.scalar_one_or_none()
+        # 2. Fetch Student Grades & Normalized Z-Scores
+        grade_res = await db.execute(
+            select(StudentGrade).where(StudentGrade.user_id == user_id).order_by(StudentGrade.created_at.desc())
+        )
+        grade = grade_res.scalar_one_or_none()
 
-    # 3. Fetch Optional Diagnostic Skill Checks
-    diag_res = await db.execute(
-        select(StudentDiagnosticTest).where(StudentDiagnosticTest.user_id == user_id)
-    )
-    diagnostic_tests = list(diag_res.scalars().all())
+        # 3. Fetch Optional Diagnostic Skill Checks
+        diag_res = await db.execute(
+            select(StudentDiagnosticTest).where(StudentDiagnosticTest.user_id == user_id)
+        )
+        diagnostic_tests = list(diag_res.scalars().all())
+    except Exception as db_err:
+        assessment = None
+        grade = None
+        diagnostic_tests = []
 
     # Extract vectors & traits safely
     student_riasec = assessment.riasec_scores if assessment and assessment.riasec_scores else {
@@ -91,19 +99,22 @@ async def calculate_3pillar_recommendations(
         w_pref = float(payload.custom_weights.get("w_preference", w_pref))
 
     # 5. Fetch Skill Prerequisites Hierarchy Map
-    prereq_res = await db.execute(
-        select(SkillPrerequisite).options(
-            selectinload(SkillPrerequisite.skill),
-            selectinload(SkillPrerequisite.prerequisite_skill)
-        )
-    )
-    all_prereqs = list(prereq_res.scalars().all())
     prereq_map: Dict[str, List[str]] = {}
-    for p in all_prereqs:
-        target_c = p.skill.skill_code if p.skill else ""
-        source_c = p.prerequisite_skill.skill_code if p.prerequisite_skill else ""
-        if target_c and source_c:
-            prereq_map.setdefault(target_c, []).append(source_c)
+    try:
+        prereq_res = await db.execute(
+            select(SkillPrerequisite).options(
+                selectinload(SkillPrerequisite.skill),
+                selectinload(SkillPrerequisite.prerequisite_skill)
+            )
+        )
+        all_prereqs = list(prereq_res.scalars().all())
+        for p in all_prereqs:
+            target_c = p.skill.skill_code if p.skill else ""
+            source_c = p.prerequisite_skill.skill_code if p.prerequisite_skill else ""
+            if target_c and source_c:
+                prereq_map.setdefault(target_c, []).append(source_c)
+    except Exception:
+        pass
 
     # 6. Retrieve all Active Majors with Admitted Subject Blocks and Required Skills
     try:
@@ -123,7 +134,11 @@ async def calculate_3pillar_recommendations(
 
         class MajorSeedAdapter:
             def __init__(self, d: dict, mock_id: int):
-                self.id = d.get("id") or mock_id
+                raw_id = d.get("id")
+                try:
+                    self.id = uuid.UUID(str(raw_id)) if raw_id else uuid.uuid5(uuid.NAMESPACE_DNS, f"major-{d.get('major_code') or mock_id}")
+                except Exception:
+                    self.id = uuid.uuid5(uuid.NAMESPACE_DNS, f"major-{d.get('major_code') or mock_id}")
                 self.major_code = d.get("major_code", "")
                 self.name = d.get("name", "")
                 self.category = d.get("category", "")
@@ -232,6 +247,7 @@ async def calculate_3pillar_recommendations(
             major_id=major.id,
             major_code=major.major_code,
             major_name=major.name,
+            category=getattr(major, "category", "Khác") or "Khác",
             overall_score=overall_score,
             score_riasec=score_riasec,
             score_academic=final_academic_score,
@@ -277,21 +293,25 @@ async def calculate_3pillar_recommendations(
         top_results.append(item)
 
     # Persist execution history for auditability
-    history = RecommendationHistory(
-        user_id=user_id,
-        weights_applied=weights_dict,
-        ranked_results=[it.model_dump() for it in top_results],
-        generated_at=datetime.now(timezone.utc)
-    )
-    db.add(history)
-    await db.commit()
+    generated_now = datetime.now(timezone.utc)
+    try:
+        history = RecommendationHistory(
+            user_id=user_id,
+            weights_applied=weights_dict,
+            ranked_results=[it.model_dump() for it in top_results],
+            generated_at=generated_now
+        )
+        db.add(history)
+        await db.commit()
+    except Exception:
+        pass
 
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
     print(f"3-Pillar Recommendation Engine evaluated {len(majors)} majors in {elapsed_ms:.2f}ms.")
 
     return RecommendationResponse(
         user_id=user_id,
-        generated_at=history.generated_at,
+        generated_at=generated_now,
         weights_applied=weights_dict,
         total_majors_evaluated=len(majors),
         recommendations=top_results

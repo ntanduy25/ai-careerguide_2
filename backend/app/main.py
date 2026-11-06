@@ -65,7 +65,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register 6 Modular Service Routers under /api/v1
+# Register 6 Modular Service Routers under /api/v1 and /api (dual prefix for complete FE sync)
 app.include_router(identity_router, prefix=settings.API_V1_STR)
 app.include_router(assessment_router, prefix=settings.API_V1_STR)
 app.include_router(assessments_modular_router, prefix=settings.API_V1_STR)
@@ -73,6 +73,16 @@ app.include_router(recommender_router, prefix=settings.API_V1_STR)
 app.include_router(taxonomy_router, prefix=settings.API_V1_STR)
 app.include_router(roadmap_router, prefix=settings.API_V1_STR)
 app.include_router(rag_governance_router, prefix=settings.API_V1_STR)
+
+# Direct /api prefix aliases for frontend apiRequest routes
+if settings.API_V1_STR != "/api":
+    app.include_router(identity_router, prefix="/api")
+    app.include_router(assessment_router, prefix="/api")
+    app.include_router(assessments_modular_router, prefix="/api")
+    app.include_router(recommender_router, prefix="/api")
+    app.include_router(taxonomy_router, prefix="/api")
+    app.include_router(roadmap_router, prefix="/api")
+    app.include_router(rag_governance_router, prefix="/api")
 
 
 @app.get("/health", tags=["Health & Status"])
@@ -83,6 +93,33 @@ async def health_check():
         "version": settings.VERSION,
         "environment": settings.ENVIRONMENT
     }
+
+
+@app.get("/health/db", tags=["Health & Status"])
+@app.get("/api/health/db", tags=["Health & Status"])
+async def db_health_check():
+    from app.core.database import get_db, engine
+    from sqlalchemy import text
+    try:
+        async for db in get_db():
+            if not db:
+                return {"status": "offline", "message": "Database session unavailable"}
+            majors_count = (await db.execute(text("SELECT COUNT(*) FROM majors;"))).scalar()
+            questions_count = (await db.execute(text("SELECT COUNT(*) FROM assessment_questions;"))).scalar()
+            users_count = (await db.execute(text("SELECT COUNT(*) FROM users;"))).scalar()
+            return {
+                "status": "connected",
+                "database_engine": engine.name,
+                "majors_count": majors_count,
+                "questions_count": questions_count,
+                "users_count": users_count,
+                "message": "Cơ sở dữ liệu đã kết nối thành công và đầy đủ dữ liệu hoạt động!"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "detail": str(e)
+        }
 
 
 @app.get("/", tags=["Root"])

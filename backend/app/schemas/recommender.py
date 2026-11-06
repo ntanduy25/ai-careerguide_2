@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class RecommendationRequest(BaseModel):
@@ -18,6 +18,7 @@ class MajorRecommendationItem(BaseModel):
     major_id: uuid.UUID
     major_code: str
     major_name: str
+    category: Optional[str] = "Khác"
     overall_score: float = Field(ge=0.0, le=1.0)
     score_riasec: float = Field(ge=0.0, le=1.0)
     score_academic: float = Field(ge=0.0, le=1.0)
@@ -54,6 +55,42 @@ class MajorRecommendationItem(BaseModel):
     admission_advice: Optional[str] = Field(default=None)
     academic_tier: Optional[str] = Field(default="STANDARD_COMPETITION")
     academic_tier_label: Optional[str] = Field(default="Vừa sức / Tiêu chuẩn")
+
+    # Frontend Compatibility Fields (Natively matches FE Major interface)
+    id: Optional[str] = None
+    code: Optional[str] = None
+    name: Optional[str] = None
+    university: Optional[str] = None
+    match: Optional[int] = None
+    feasibility: Optional[str] = None
+    fit: Optional[Dict[str, int]] = None
+    gaps: Optional[List[str]] = None
+
+    @model_validator(mode="after")
+    def populate_fe_fields(self):
+        if not self.id:
+            self.id = self.major_code
+        if not self.code:
+            self.code = self.major_code
+        if not self.name:
+            self.name = self.major_name
+        if self.match is None:
+            self.match = int(round(self.overall_score * 100))
+        if not self.feasibility:
+            self.feasibility = self.feasibility_tier or "TARGET"
+        if not self.fit:
+            self.fit = {
+                "interest": int(round(self.score_riasec * 100)),
+                "academic": int(round(self.score_academic * 100)),
+                "cognitive": int(round(self.score_preference * 100))
+            }
+        if not self.gaps:
+            self.gaps = self.competency_gaps[:3] if self.competency_gaps else [
+                "Tư duy thuật toán", "Tiếng Anh chuyên ngành", "Kỹ năng làm dự án"
+            ]
+        if not self.university:
+            self.university = f"Khối {self.best_matching_block}" if self.best_matching_block else "Chuẩn Bộ GD&ĐT"
+        return self
 
 
 class RecommendationResponse(BaseModel):

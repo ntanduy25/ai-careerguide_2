@@ -67,6 +67,11 @@ postgres_data/
 *.sqlite3
 *.db
 
+# Backup folders
+src_backup_prior_to_zip/
+frontend/src_backup_prior_to_zip/
+*.bak
+
 # IDE & OS
 .idea/
 .vscode/*

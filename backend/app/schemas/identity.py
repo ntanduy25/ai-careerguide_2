@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 from app.models.identity import UserRole
 
 
@@ -21,11 +21,19 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: EmailStr
     full_name: str
+    name: Optional[str] = None
     role: UserRole
     is_active: bool
+    grade: Optional[int] = 12
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def populate_fe_compatibility(self):
+        if not self.name and self.full_name:
+            self.name = self.full_name
+        return self
 
 
 class TokenResponse(BaseModel):

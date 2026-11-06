@@ -1,3 +1,4 @@
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +9,7 @@ from app.schemas.roadmap import (
     MajorRoadmapResponse,
     StudentRoadmapProgressUpdate,
     StudentRoadmapProgressResponse,
+    RoadmapWeekSchema,
 )
 from app.schemas.rag import (
     GuidancePersonalizationRequest,
@@ -93,3 +95,56 @@ async def get_progress(
             detail=f"No active roadmap progress found for major {major_code}."
         )
     return prog
+
+
+@router.get("/weeks/{major_code}", response_model=List[RoadmapWeekSchema])
+@router.get("/weeks", response_model=List[RoadmapWeekSchema])
+async def get_roadmap_weeks_for_fe(
+    major_code: str = "7480101",
+    db: AsyncSession = Depends(get_db)
+):
+    """Returns 4-week roadmap formatted directly for frontend RoadmapView."""
+    roadmap_res = await service.get_cached_major_roadmap(db, major_code)
+    milestones = roadmap_res.roadmap_data.milestones if roadmap_res and roadmap_res.roadmap_data else []
+    
+    eyebrows = ["Nền tảng", "Thực hành", "Dự án", "Bứt phá"]
+    weeks: List[RoadmapWeekSchema] = []
+    
+    for idx, m in enumerate(milestones[:4]):
+        w_num = idx + 1
+        eyebrow = eyebrows[idx] if idx < len(eyebrows) else f"Tuần {w_num}"
+        content_lines = [
+            f"## Mục tiêu tuần {w_num}: {m.title}",
+            m.description,
+            "\n### Nhiệm vụ trọng tâm:"
+        ]
+        for a in m.actions:
+            content_lines.append(f"- {a}")
+        if m.learning_objectives:
+            content_lines.append("\n### Năng lực cần đạt:")
+            for o in m.learning_objectives:
+                content_lines.append(f"- {o}")
+                
+        weeks.append(RoadmapWeekSchema(
+            id=f"week-{w_num}",
+            week=w_num,
+            eyebrow=eyebrow,
+            title=m.title,
+            description=m.description,
+            content="\n".join(content_lines),
+            tasks=m.actions if m.actions else ["Đọc tài liệu tổng quan", "Thực hành bài tập nhỏ", "Đánh giá tiến độ"]
+        ))
+    
+    while len(weeks) < 4:
+        w_num = len(weeks) + 1
+        weeks.append(RoadmapWeekSchema(
+            id=f"week-{w_num}",
+            week=w_num,
+            eyebrow=eyebrows[w_num - 1] if w_num - 1 < len(eyebrows) else f"Tuần {w_num}",
+            title=f"Giai đoạn {w_num}: Đánh giá & Phát triển",
+            description="Tự đánh giá năng lực và chuẩn bị cho kỳ thi tốt nghiệp THPT.",
+            content=f"## Mục tiêu tuần {w_num}\nHoàn thành bài tập mẫu và đánh giá kỹ năng.",
+            tasks=["Hoàn thành bài đánh giá", "Cập nhật hồ sơ năng lực", "Lập kế hoạch 90 ngày"]
+        ))
+        
+    return weeks
