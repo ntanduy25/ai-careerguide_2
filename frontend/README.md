@@ -1,32 +1,58 @@
-# React + TypeScript + Vite
+# AI CareerGuide - Frontend Architecture & Contribution Guide
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Dự án Frontend được xây dựng trên nền tảng **React 19 + TypeScript + Vite + Tailwind CSS v4**.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 📁 Cấu trúc thư mục (Directory Structure)
 
-## React Compiler
+Thành viên trong team vui lòng tuân thủ phân chia thư mục khi thêm code:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```text
+frontend/src/
+├── assets/         # Tài nguyên tĩnh: hình ảnh, svg, logos, icons riêng
+├── components/     # UI Components dùng chung và theo phân hệ
+│   ├── common/     # Button, Card, Badge, Modal, Input...
+│   ├── layout/     # Sidebar, MainLayout, PageContainer, Footer...
+│   ├── assessment/ # Các thẻ câu hỏi RIASEC, nhận thức, bảng nhập điểm...
+│   ├── visualization/ # Biểu đồ Recharts, sơ đồ luồng React Flow...
+│   └── xai/        # ExplanationBox, FeasibilityBadge, Funnel...
+├── constants/      # Các hằng số hệ thống, danh mục, quy chuẩn văn bản
+├── context/        # React Context quản lý Global State (Auth, Assessment)
+├── data/           # Mock data dự phòng hoặc bộ câu hỏi tĩnh
+├── hooks/          # Custom React Hooks (useAuth, useRoadmap, useAssessment...)
+├── pages/          # Các trang giao diện chính (Route Views)
+│   ├── Home.tsx
+│   ├── Login.tsx
+│   ├── Dashboard.tsx
+│   ├── AssessmentWizard.tsx
+│   ├── MajorDetail.tsx
+│   ├── RoadmapView.tsx
+│   └── AdminHITLDashboard.tsx
+├── routes/         # Định tuyến URL (React Router v7) & Route Guards (Private/Admin)
+├── services/       # Giao tiếp HTTP với Backend (API Client, Storage helper)
+├── types/          # Khai báo TypeScript Interfaces & Type definitions
+└── utils/          # Hàm tiện ích (formatting, text manipulation, math helpers)
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+---
+
+## 🛠️ Hướng dẫn phát triển (Development)
+
+1. **Cài đặt thư viện**:
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+2. **Chạy máy chủ phát triển (Dev server)**:
+   ```bash
+   npm run dev
+   ```
+   Ứng dụng sẽ chạy tại: `http://localhost:5173/`
+
+3. **Kiểm tra TypeScript & Build**:
+   ```bash
+   npm run build
+   ```
+   *(Trước khi commit, luôn đảm bảo lệnh này chạy với 0 lỗi).*

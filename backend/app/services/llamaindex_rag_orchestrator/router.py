@@ -1,11 +1,11 @@
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import require_admin, get_current_user
-from app.models.identity import User
+from app.core.dependencies import require_admin, get_current_user, get_optional_current_user
+from app.models.identity import User, UserRole
 from app.models.staging import StagingStatus, StagingStreamType
 from app.schemas.staging import (
     StagingRecordCreate,
@@ -20,6 +20,11 @@ from app.schemas.rag import (
     GuidancePersonalizationResponse,
     SemanticSearchRequest,
     ChunkSearchResult,
+    AIExplanationRequest,
+    AIExplanationResponse,
+    AIChatRequest,
+    AIChatResponse,
+    AIChatConnectionResponse,
 )
 from app.services.llamaindex_rag_orchestrator import service
 
@@ -113,7 +118,9 @@ async def upload_moet_circular_document(
     and stages into staging_records (status = PENDING).
     GUARDRAIL: Admin role only.
     """
-    content = await file.read()
+    content = await file.read(10 * 1024 * 1024 + 1)
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(413, "Tệp vượt quá giới hạn 10 MB.")
     return await service.ingest_moet_circular(
         db=db,
         file_bytes=content,
@@ -163,10 +170,63 @@ async def personalize_study_guidance(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Guidance RAG endpoint for students (FR06, DF06):
-    Retrieves verified cached roadmap context from PostgreSQL (status = APPROVED, <= 1s)
-    and tailors weekly study milestones according to identified skill gaps using gpt-4o-mini.
-    Includes strict 8s timeout with automatic graceful Static Fallback Template.
-    """
+    """Build an owned, deterministic study plan with explicit source provenance."""
+    if payload.user_id != current_user.id:
+        raise HTTPException(403, "Chỉ được lập kế hoạch cho tài khoản đang đăng nhập.")
     return await service.personalize_guidance(db, payload)
+
+@router.post("/explain-recommendation", response_model=AIExplanationResponse)
+async def explain_major_recommendation(
+    payload: AIExplanationRequest,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Explain catalog and scorer facts from the authorized assessment snapshot."""
+    user_id = current_user.id if current_user else None
+    return await service.explain_recommendation_with_ai(db, payload, user_id)
+
+
+@router.post("/chat/connection", response_model=AIChatConnectionResponse)
+async def check_counselor_connection(
+    response: Response,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Only a fixed tiny prompt; no client text, profile or provider configuration."""
+    from app.services.llamaindex_rag_orchestrator.counselor_connection import check_connection
+    response.headers["Cache-Control"] = "no-store"
+    return await check_connection(db)
+
+
+@router.post("/chat", response_model=AIChatResponse)
+async def chat_with_counselor(
+    payload: AIChatRequest,
+    response: Response,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Career-only trusted rendering; student evidence is not sent to a provider."""
+    response.headers["Cache-Control"] = "no-store"
+    user_id = current_user.id if current_user else None
+    return await service.chat_with_career_counselor(db, payload, user_id)
+
+
+# Alias quản trị dùng cùng DB profile/service với /admin/ai-config.
+from app.schemas.ai_config import AIConfigDraft, AIConfigProbe, AIConfigStatus, AIProbeResult
+from app.services.ai_config import service as config_service
+from app.services.ai_config.router import no_store
+
+@router.get("/llm-status", response_model=AIConfigStatus)
+async def get_system_llm_status(response: Response, current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    no_store(response)
+    return await config_service.get_status(db)
+
+@router.post("/test-llm-connection", response_model=AIProbeResult)
+async def test_llm_api_connection(payload: AIConfigProbe, response: Response, current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    no_store(response)
+    return await config_service.probe_draft(db,payload,current_user.id)
+
+@router.post("/update-llm-config", response_model=AIConfigStatus)
+async def update_system_llm_config(payload: AIConfigDraft, response: Response, current_user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    no_store(response)
+    return await config_service.apply_config(db,payload,current_user.id)

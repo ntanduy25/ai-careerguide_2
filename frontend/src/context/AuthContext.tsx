@@ -1,142 +1,125 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, AuthResponse, UserProfileDetails } from '../types';
-import { authService } from '../services/careerServices';
-import { purgeLegacyStorage } from '../utils/userStorage';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { readStorage, writeStorage } from "../services/storage"
+import { ApiError, currentToken, requestJSON, SESSION_CHANGED_EVENT, SESSION_INVALID_EVENT } from "../services/api"
+import type { User, UserRole } from "../types/user"
 
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  isAdmin: boolean;
-  login: (email: string, password: string) => Promise<AuthResponse>;
-  register: (email: string, password: string, fullName?: string, role?: string) => Promise<AuthResponse>;
-  logout: () => void;
-  consentGranted: boolean;
-  grantConsent: () => Promise<void>;
-  updateProfile: (profileData: { full_name?: string; profile?: UserProfileDetails }) => void;
+interface AuthContextValue {
+  user: User | null
+  token: string | null
+  checking: boolean
+  sessionError: string | null
+  refreshSession: () => Promise<void>
+  login: (role?: UserRole, customUser?: User, authToken?: string) => void
+  logout: () => void
+  updateUser: (updates: Partial<User>) => void
+}
+interface ProfileResponse {
+  id: string; email: string; full_name: string; role: string
+  gender?: string; grade_level?: string; school_class?: string; school_name?: string
+}
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+function storedUser(): User | null {
+  const stored = readStorage<User | null>("career-guide:user", null)
+  const token = currentToken()
+  if (!stored || !token || token.split(".").length !== 3) return null
+  return stored
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(storedUser)
+  const [token, setToken] = useState<string | null>(currentToken)
+  const [checking, setChecking] = useState(Boolean(currentToken()))
+  const [sessionError, setSessionError] = useState<string | null>(null)
+  const generation = useRef(0)
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Purge legacy un-scoped demo keys on application boot so they never leak to new accounts
-  useEffect(() => {
-    purgeLegacyStorage();
-  }, []);
+  const logout = useCallback(() => {
+    generation.current += 1
+    localStorage.removeItem("career-guide:user")
+    localStorage.removeItem("career-guide:token")
+    setUser(null); setToken(null); setChecking(false)
+  }, [])
 
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('careerguide_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('careerguide_token');
-  });
-  const [consentGranted, setConsentGranted] = useState<boolean>(() => {
-    return localStorage.getItem('careerguide_consent') === 'true';
-  });
-
-  useEffect(() => {
-    if (token && !user) {
-      authService.getProfile()
-        .then(u => {
-          setUser(u);
-          localStorage.setItem('careerguide_user', JSON.stringify(u));
-        })
-        .catch(() => {
-          logout();
-        });
+  const refreshSession = useCallback(async () => {
+    const expectedToken = currentToken()
+    const version = ++generation.current
+    if (!expectedToken) { setUser(null); setToken(null); setChecking(false); return }
+    try {
+      const profile = await requestJSON<ProfileResponse>("/identity/me")
+      if (version !== generation.current || currentToken() !== expectedToken) return
+      const next: User = { id: String(profile.id), email: profile.email, name: profile.full_name,
+        role: profile.role.toUpperCase() === "ADMIN" ? "admin" : "student", gender: profile.gender,
+        grade_level: profile.grade_level, school_class: profile.school_class, school_name: profile.school_name }
+      setUser(next); setToken(expectedToken); setSessionError(null)
+      writeStorage("career-guide:user", next)
+    } catch (error) {
+      if (version !== generation.current) return
+      if (error instanceof ApiError && [401, 403].includes(error.status)) {
+        logout(); setSessionError("Phiên đăng nhập đã hết hạn hoặc tài khoản không còn quyền truy cập.")
+      } else if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setSessionError("Chưa xác minh được phiên đăng nhập. Kiểm tra kết nối rồi thử lại.")
+      }
+    } finally {
+      if (version === generation.current) setChecking(false)
     }
-  }, [token]);
+  }, [logout])
 
-  const login = async (email: string, password: string) => {
-    const res: AuthResponse = await authService.login({ email, password });
-    setToken(res.access_token);
-    setUser(res.user);
-    localStorage.setItem('careerguide_token', res.access_token);
-    localStorage.setItem('careerguide_user', JSON.stringify(res.user));
-    window.dispatchEvent(new CustomEvent('careerguide_auth_changed'));
-    return res;
-  };
+  const login = useCallback((_role: UserRole = "student", customUser?: User, authToken?: string) => {
+    if (!customUser || !authToken || authToken.split(".").length !== 3) return
+    generation.current += 1
+    writeStorage("career-guide:user", customUser)
+    writeStorage("career-guide:token", authToken)
+    setUser(customUser); setToken(authToken); setChecking(false); setSessionError(null)
+  }, [])
 
-  const register = async (email: string, password: string, fullName?: string) => {
-    // Public registration is strictly locked to STUDENT role
-    const res: AuthResponse = await authService.register({
-      email,
-      password,
-      full_name: fullName,
-      role: 'STUDENT',
-    });
-    setToken(res.access_token);
-    setUser(res.user);
-    localStorage.setItem('careerguide_token', res.access_token);
-    localStorage.setItem('careerguide_user', JSON.stringify(res.user));
-    window.dispatchEvent(new CustomEvent('careerguide_auth_changed'));
-    return res;
-  };
+  const updateUser = useCallback((updates: Partial<User>) => {
+    setUser(current => {
+      if (!current) return null
+      const updated = { ...current, ...updates }
+      writeStorage("career-guide:user", updated)
+      return updated
+    })
+  }, [])
 
-  const grantConsent = async () => {
-    setConsentGranted(true);
-    localStorage.setItem('careerguide_consent', 'true');
-    if (token) {
-      try {
-        await authService.submitConsent({
-          consent_purpose: 'Xử lý dữ liệu định hướng nghề nghiệp theo Luật số 91/2025/QH15',
-          granted: true,
-        });
-      } catch (e) {
-        console.warn('Failed to sync consent with backend:', e);
+  useEffect(() => {
+    // Xóa cache cũ có thể chứa mật khẩu demo hoặc phản hồi thuộc tài khoản trước.
+    for (const key of Object.keys(localStorage)) {
+      if (key === "career-guide:local-users" || key.startsWith("career-guide:/")) localStorage.removeItem(key)
+    }
+    const invalid = (event: Event) => {
+      const detail = (event as CustomEvent<{ token: string; message: string }>).detail
+      if (detail?.token === currentToken()) { logout(); setSessionError(detail.message) }
+    }
+    const storage = (event: StorageEvent) => {
+      if (event.key === "career-guide:token") {
+        generation.current += 1
+        setUser(null); setToken(currentToken()); setChecking(Boolean(currentToken()))
+        void refreshSession()
       }
     }
-  };
+    const verify = () => { if (document.visibilityState === "visible") void refreshSession() }
+    window.addEventListener(SESSION_INVALID_EVENT, invalid)
+    window.addEventListener(SESSION_CHANGED_EVENT, verify)
+    window.addEventListener("storage", storage)
+    window.addEventListener("focus", verify)
+    void refreshSession()
+    const timer = window.setInterval(verify, 30000)
+    return () => {
+      generation.current += 1
+      window.clearInterval(timer)
+      window.removeEventListener(SESSION_INVALID_EVENT, invalid)
+      window.removeEventListener(SESSION_CHANGED_EVENT, verify)
+      window.removeEventListener("storage", storage)
+      window.removeEventListener("focus", verify)
+    }
+  }, [logout, refreshSession])
 
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('careerguide_token');
-    localStorage.removeItem('careerguide_user');
-    window.dispatchEvent(new CustomEvent('careerguide_auth_changed'));
-  };
-
-  const updateProfile = (profileData: { full_name?: string; profile?: UserProfileDetails }) => {
-    if (!user) return;
-    const updatedUser: User = {
-      ...user,
-      full_name: profileData.full_name !== undefined ? profileData.full_name : user.full_name,
-      profile: {
-        ...(user.profile || {}),
-        ...(profileData.profile || {}),
-      },
-    };
-    setUser(updatedUser);
-    localStorage.setItem('careerguide_user', JSON.stringify(updatedUser));
-  };
-
-  const isAdmin = user?.role === 'ADMIN';
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isAuthenticated: !!token,
-        isAdmin,
-        login,
-        register,
-        logout,
-        consentGranted,
-        grantConsent,
-        updateProfile,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+  const value = useMemo(() => ({ user, token, checking, sessionError, refreshSession, login, logout, updateUser }),
+    [user, token, checking, sessionError, refreshSession, login, logout, updateUser])
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (!context) throw new Error("useAuth must be used within AuthProvider")
+  return context
+}

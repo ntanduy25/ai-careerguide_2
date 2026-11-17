@@ -1,0 +1,150 @@
+{
+  "audited_root": "E:\\CMU-SoftWareEngineering\\CAPSTONE PROJECT\\capstone 1\\AI_CAREERGUIDE_1",
+  "audited_date": "2026-11-17",
+  "status": "REVIEW_ONLY_NO_DELETION",
+  "first_wave": [
+    {
+      "id": "FE-01",
+      "path": "frontend/src/components/assessment/CognitiveQuestionCard.tsx",
+      "line": 22,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 5338,
+      "sha256": "df26446e74f60c27ea6711c818f68a4b3592e8aa5fca8b2c1f4b3fb421ba7a75",
+      "evidence": "Không import/re-export/JSX consumer/test; wizard dùng component nội bộ khác.",
+      "deleted": false
+    },
+    {
+      "id": "FE-02",
+      "path": "frontend/src/components/assessment/QuestionCard.tsx",
+      "line": 5,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 1778,
+      "sha256": "43f7783292690b9bc9284c82e0fefa6526231e524ad3657f864e3c54c9e40eb7",
+      "evidence": "Không consumer; chỉ liên kết tới LikertScale trong cùng cụm chết.",
+      "deleted": false
+    },
+    {
+      "id": "FE-03",
+      "path": "frontend/src/components/assessment/LikertScale.tsx",
+      "line": 15,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 2530,
+      "sha256": "10bc388b909fa967eeb5bfd9696ab035846ca1285bd15c995469e75be3074051",
+      "evidence": "Consumer duy nhất là QuestionCard.tsx:3; xóa cùng FE-02.",
+      "deleted": false
+    },
+    {
+      "id": "FE-04",
+      "path": "frontend/src/components/visualization/ScoreBarChart.tsx",
+      "line": 17,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 1678,
+      "sha256": "640810ea0b31bdcfb8922e36172709d3e69bc31564eb81ca3ae5c8af0542b11a",
+      "evidence": "Không consumer/test; chỉ được nhắc trong tài liệu cấu trúc.",
+      "deleted": false
+    },
+    {
+      "id": "FE-05",
+      "path": "frontend/src/constants/index.ts",
+      "line": 5,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 958,
+      "sha256": "082c03ad3fb7df3cf6631137f3fe03a6e2050b79d7904c92a378b43b5185bed8",
+      "evidence": "RIASEC_DIMENSIONS, APP_ROUTES, MOET_REGULATIONS không có caller.",
+      "deleted": false
+    },
+    {
+      "id": "BE-01",
+      "path": "backend/app/models.py",
+      "line": 1,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 125,
+      "sha256": "7b29b0e46781e9cd177d7be5423119a68d02aa59e263142ebb800fc64d558047",
+      "evidence": "Shim bị package models/__init__.py cùng tên che; không có direct file loader.",
+      "deleted": false
+    },
+    {
+      "id": "BE-02",
+      "path": "backend/app/schemas.py",
+      "line": 1,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 137,
+      "sha256": "f5e5d2c2cd6faa2629bfcf015a1cbe45d85a707a8848b9809a7a1457411e2f9e",
+      "evidence": "Shim bị package schemas/__init__.py cùng tên che; giữ package thật.",
+      "deleted": false
+    },
+    {
+      "id": "BE-03",
+      "path": "backend/app/middleware/logging.py",
+      "line": 10,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 829,
+      "sha256": "43b55ac72aaed8a648fe05284229e9a01a3fd58d8ce00d551ae5e9075d32c48f",
+      "evidence": "RequestLoggingMiddleware không import, không add_middleware, không test.",
+      "deleted": false
+    },
+    {
+      "id": "BE-04",
+      "path": "backend/app/middleware/__init__.py",
+      "line": 1,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 54,
+      "sha256": "98e2f55259e394a893cf4960e160d57b5bd68f89e55457eb3feaa06b4aa3adf3",
+      "evidence": "Chỉ docstring; bỏ cùng module logging không được đăng ký.",
+      "deleted": false
+    },
+    {
+      "id": "BE-05",
+      "path": "backend/app/utils/helpers.py",
+      "line": 6,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 910,
+      "sha256": "b5686abe57699423f6b70467e6ee69a594c07540fa6a79d2a1fe77476f82d51a",
+      "evidence": "Ba helper chỉ có định nghĩa, không import/reflection/test.",
+      "deleted": false
+    },
+    {
+      "id": "BE-06",
+      "path": "backend/app/utils/__init__.py",
+      "line": 1,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 50,
+      "sha256": "61c90c25c375da480e35283c72362faf24913f3d5038c03c8924d21ce62791ce",
+      "evidence": "Chỉ docstring; bỏ cùng helpers sau kiểm tra namespace.",
+      "deleted": false
+    },
+    {
+      "id": "BE-07",
+      "path": "backend/app/data/moet_taxonomy_tt09.json",
+      "line": 1,
+      "classification": "DELETE_CANDIDATE_AFTER_REGRESSION",
+      "confidence": "HIGH_STATIC",
+      "bytes": 96604,
+      "sha256": "ecb2639f9a5293d1888761fb824a2669db37022e26eff00eb26d7af5c2fe8f6b",
+      "evidence": "Trùng SHA256 với app/db/seeds/moet_taxonomy_tt09.json; không consumer đường dẫn app/data. Giữ bản db/seeds.",
+      "deleted": false
+    }
+  ],
+  "bytes": 110991,
+  "requires_regression_before_deletion": true,
+  "excluded_from_blanket_delete": [
+    ".agents",
+    "backend/app/models",
+    "backend/app/schemas",
+    "backend/app/db/seeds",
+    "backend/tests",
+    "frontend/src/data",
+    "frontend/src/components/visualization/RoadmapFlow.tsx"
+  ]
+}

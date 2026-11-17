@@ -1,3 +1,4 @@
+import uuid
 import re
 import asyncio
 import logging
@@ -16,19 +17,33 @@ from app.schemas.rag import (
     GuidancePersonalizationResponse,
     PersonalizedScheduleTask,
     SemanticSearchRequest,
-    ChunkSearchResult
+    ChunkSearchResult,
+    AIExplanationRequest,
+    AIExplanationResponse,
+    AIChatMessage,
+    AIChatRequest,
+    AIChatResponse,
+)
+from app.models.assessment import StudentAssessment, StudentGrade, StudentDiagnosticTest
+from app.services.recommender.engine import RIASEC_NAMES_VI, RIASEC_DIMENSIONS, calculate_riasec_cosine_similarity
+from app.services.gap_roadmap_engine.gap_engine import (
+    infer_mastered_skills_from_diagnostic_tests,
+    infer_mastered_skills_from_grades
 )
 from app.services.llamaindex_rag_orchestrator.hitl_governance import get_text_embedding
 from app.services.gap_roadmap_engine.service import generate_static_fallback_roadmap
 
 logger = logging.getLogger(__name__)
 
-
 def sanitize_pii(text: str) -> str:
     """
     Sanitizes Personally Identifiable Information (PII) before passing context
     to external AI APIs to comply with OWASP ASVS Level 2 and Vietnamese Law 91/2025/QH15.
+    Strictly removes emails, phone numbers, national IDs, student IDs, personal names,
+    and addresses while preserving pure academic metrics (scores, test answers).
     """
+    if not text:
+        return ""
     # Sanitize email addresses
     text = re.sub(r'[\w\.-]+@[\w\.-]+\.\w+', '[REDACTED_EMAIL]', text)
     # Sanitize Vietnamese telephone numbers
@@ -37,6 +52,12 @@ def sanitize_pii(text: str) -> str:
     text = re.sub(r'\b\d{12}\b', '[REDACTED_ID]', text)
     # Sanitize student ID sequences (10-11 digits)
     text = re.sub(r'\b\d{10,11}\b', '[REDACTED_STUDENT_ID]', text)
+    # Sanitize self-introduced personal names
+    text = re.sub(r'(?i)(tên tôi là|em tên là|tôi tên là|tên em là)\s+([A-ZÀ-Ỹa-zà-ỹ\s]+)', r'\1 [REDACTED_NAME]', text)
+    # Sanitize addresses / locations
+    text = re.sub(r'(?i)(nhà ở|địa chỉ|ở tại|sống tại|quê ở)\s+([A-ZÀ-Ỹa-zà-ỹ0-9,\s]+)', r'\1 [REDACTED_ADDRESS]', text)
+    # Sanitize school names
+    text = re.sub(r'(?i)(trường thpt|học sinh trường|học trường)\s+([A-ZÀ-Ỹa-zà-ỹ0-9\s]+)', r'trường [REDACTED_SCHOOL]', text)
     return text
 
 
@@ -67,162 +88,110 @@ def build_fallback_personalized_schedule(
     return tasks
 
 
-async def call_llm_for_personalization(
-    major_code: str,
-    major_title: str,
-    missing_skills: List[str],
-    weekly_hours: int,
-    milestones: List[Dict[str, Any]],
-    source_title: str
-) -> GuidancePersonalizationResponse:
-    """
-    Invokes gpt-4o-mini to synthesize verified milestones with student skill gaps.
-    Strictly isolated: does not search the web or alter major ranking.
-    """
-    from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-
-    milestone_summary = "\n".join([
-        f"- Mốc {m.get('step')}: {m.get('title')} ({m.get('duration_weeks', 2)} tuần). Mục tiêu: {', '.join(m.get('learning_objectives', []))}"
-        for m in milestones
-    ])
-    
-    prompt = (
-        f"Bạn là Cố vấn học tập AI CareerGuide chuẩn hóa theo chương trình GDPT và Đại học Việt Nam.\n"
-        f"Học sinh đang định hướng ngành: {major_title} (Mã ngành: {major_code}).\n"
-        f"Các khoảng trống kỹ năng cần tập trung bù đắp: {', '.join(missing_skills) if missing_skills else 'Theo chuẩn chung của ngành'}.\n"
-        f"Thời gian học tập tự chủ sẵn sàng: {weekly_hours} giờ/tuần.\n\n"
-        f"Lộ trình chuẩn hóa đã kiểm duyệt từ nguồn '{source_title}':\n{milestone_summary}\n\n"
-        f"RÀNG BUỘC NGHIÊM NGẶT (Table 6 & Pure Guidance Scope):\n"
-        f"1. Tuyệt đối bám sát các mốc học tập trên, không bịa đặt chương trình đào tạo hay học phần ngoài nguồn.\n"
-        f"2. Tuyệt đối không đề cập đến học phí hay vị trí địa lý.\n"
-        f"3. Lập kế hoạch 4 tuần học tập cá nhân hóa, mỗi tuần nêu rõ kỹ năng trọng tâm (focus_skill), danh sách việc cần làm cụ thể (tasks), tài liệu nên đọc và số giờ dự kiến.\n"
-    )
-    
-    sanitized_prompt = sanitize_pii(prompt)
-    
-    response = await client.chat.completions.create(
-        model=settings.LLM_MODEL,
-        messages=[
-            {"role": "system", "content": "Bạn là chuyên gia tư vấn lộ trình học tập cá nhân hóa AI CareerGuide."},
-            {"role": "user", "content": sanitized_prompt}
-        ],
-        temperature=0.2
-    )
-    
-    content = response.choices[0].message.content or ""
-    # Format fallback schedule wrapped with AI summary
-    schedule = build_fallback_personalized_schedule(major_code, major_title, missing_skills, weekly_hours, milestones)
-    
-    return GuidancePersonalizationResponse(
-        major_code=major_code,
-        personalization_summary=content[:300] if len(content) > 30 else f"Kế hoạch 4 tuần tập trung bổ trợ kỹ năng cho ngành {major_title}.",
-        schedule=schedule,
-        is_fallback=False
-    )
+async def call_llm_for_personalization(*args, **kwargs):
+    """Retired: free-form provider prose cannot cross the guidance boundary."""
+    raise RuntimeError("Use deterministic personalize_guidance with server-owned evidence")
 
 
 async def personalize_guidance(
     db: AsyncSession,
     payload: GuidancePersonalizationRequest
 ) -> GuidancePersonalizationResponse:
+    """Build a bounded study plan from the canonical roadmap and measured gap data.
+
+    The request's ``missing_skills`` field is legacy display input and is deliberately
+    ignored.  A client must not be able to manufacture a competency gap or inject
+    instructions into a study plan; gaps come from the server-owned assessment and
+    catalog records.
     """
-    Guidance RAG Pipeline (FR06, DF06):
-    1. Direct indexed cache lookup from major_roadmaps (<= 1s).
-    2. PII Sanitization.
-    3. AI API call with strict 8-second timeout (asyncio.wait_for).
-    4. Graceful Fallback: Immediately returns standardized static fallback roadmap if AI times out or errors.
-    """
-    # 1. Retrieve cached roadmap (<= 1s)
-    res = await db.execute(select(MajorRoadmap).where(MajorRoadmap.major_code == payload.major_code))
-    cached = res.scalar_one_or_none()
-    
-    major_res = await db.execute(select(Major).where(Major.major_code == payload.major_code))
-    major = major_res.scalar_one_or_none()
-    major_name = major.name if major else f"Mã ngành {payload.major_code}"
+    from app.services.gap_roadmap_engine.service import (
+        get_cached_major_roadmap,
+        get_student_major_skill_gaps,
+    )
 
-    # If uncurated or cached as fallback template, serve immediately
-    if not cached or cached.is_fallback:
-        fallback_data = generate_static_fallback_roadmap(payload.major_code, major_name)
-        schedule = build_fallback_personalized_schedule(
-            payload.major_code,
-            major_name,
-            payload.missing_skills,
-            payload.weekly_hours_available,
-            fallback_data["milestones"]
-        )
-        return GuidancePersonalizationResponse(
-            major_code=payload.major_code,
-            personalization_summary=f"Lộ trình tĩnh chuẩn hóa dự phòng cho ngành {major_name} (chờ kiểm duyệt chính thức).",
-            schedule=schedule,
-            is_fallback=True
-        )
+    from app.services.llamaindex_rag_orchestrator.guidance_boundary import plain
+    roadmap = await get_cached_major_roadmap(db, payload.major_code)
+    data = roadmap.roadmap_data.model_dump() if hasattr(roadmap.roadmap_data, "model_dump") else dict(roadmap.roadmap_data)
+    milestones = data.get("milestones") or []
+    source_title = str(data.get("source_title") or "nguồn chuẩn hóa của hệ thống")
 
-    # Verified roadmap is available
-    roadmap_data = cached.roadmap_data
-    milestones = roadmap_data.get("milestones", [])
-    source_title = roadmap_data.get("source_title", "Chương trình chuẩn Bộ GD&ĐT")
-
-    # If OpenAI API is not configured or during testing, return immediate deterministic schedule
-    if not settings.OPENAI_API_KEY:
-        schedule = build_fallback_personalized_schedule(
-            payload.major_code,
-            major_name,
-            payload.missing_skills,
-            payload.weekly_hours_available,
-            milestones
-        )
-        return GuidancePersonalizationResponse(
-            major_code=payload.major_code,
-            personalization_summary=f"Lộ trình học tập cá nhân hóa ngành {major_name} tập trung xử lý các lỗ hổng kỹ năng: {', '.join(payload.missing_skills) if payload.missing_skills else 'Theo chuẩn ngành'}.",
-            schedule=schedule,
-            is_fallback=False
-        )
-
-    # 3. Call AI API with strict 8.0s timeout (NFR01, NFR05)
+    # Only names returned by the gap engine may become a personalized focus.
     try:
-        response = await asyncio.wait_for(
-            call_llm_for_personalization(
-                major_code=payload.major_code,
-                major_title=major_name,
-                missing_skills=payload.missing_skills,
-                weekly_hours=payload.weekly_hours_available,
-                milestones=milestones,
-                source_title=source_title
-            ),
-            timeout=8.0
-        )
-        return response
-    except asyncio.TimeoutError:
-        logger.warning(f"Guidance RAG AI personalization timed out (> 8.0s) for {payload.major_code}. Triggering static fallback.")
-        schedule = build_fallback_personalized_schedule(
-            payload.major_code,
-            major_name,
-            payload.missing_skills,
-            payload.weekly_hours_available,
-            milestones
-        )
-        return GuidancePersonalizationResponse(
-            major_code=payload.major_code,
-            personalization_summary=f"AI phản hồi quá 8 giây. Hệ thống tự động chuyển đổi sang lộ trình chuẩn hóa dự phòng cho ngành {major_name}.",
-            schedule=schedule,
-            is_fallback=True
-        )
+        gap = await get_student_major_skill_gaps(db, payload.user_id, payload.major_code)
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.warning(f"Guidance RAG failed with error {exc}. Triggering static fallback.")
+        logger.warning("Could not load measured skill gaps for %s: %s", payload.major_code, type(exc).__name__)
+        raise HTTPException(503, "Chưa đọc được dữ liệu kỹ năng; vui lòng thử lại.") from exc
+
+    focus_skills: List[str] = []
+    for key in ("missing_prerequisites", "missing_target_skills"):
+        for item in (gap.get(key) or []):
+            if isinstance(item, dict):
+                value = item.get("name") or item.get("skill_name") or item.get("title")
+            else:
+                value = item
+            if isinstance(value, str) and value.strip() and value.strip() not in focus_skills:
+                focus_skills.append(value.strip()[:120])
+    # A generic server-owned label is preferable to claiming an unmeasured gap.
+    if not focus_skills:
+        focus_skills = ["Kiến thức nền tảng và kỹ năng cốt lõi của ngành"]
+
+    # Each schedule entry is one week with the requested total weekly budget.
+    weekly = max(2, min(int(payload.weekly_hours_available), 40))
+    per_week = weekly
+    schedule: List[PersonalizedScheduleTask] = []
+    for idx, milestone in enumerate(milestones[:4], start=1):
+        if not isinstance(milestone, dict):
+            milestone = {}
+        focus = focus_skills[(idx - 1) % len(focus_skills)]
+        title = plain(milestone.get("title") or f"Chủ đề nền tảng tuần {idx}", 160)
+        actions = milestone.get("actions") or milestone.get("learning_objectives") or []
+        trusted_actions = [plain(x, 180) for x in actions if isinstance(x, str) and plain(x, 180)]
+        if not trusted_actions:
+            trusted_actions = ["Đọc nội dung nền tảng", "Làm bài tập nhỏ và tự đánh giá kết quả"]
+        schedule.append(PersonalizedScheduleTask(
+            week_number=idx,
+            focus_skill=focus,
+            tasks=trusted_actions[:3],
+            recommended_reading=title,
+            estimated_hours=per_week,
+        ))
+    if not schedule:
         schedule = build_fallback_personalized_schedule(
-            payload.major_code,
-            major_name,
-            payload.missing_skills,
-            payload.weekly_hours_available,
-            milestones
+            payload.major_code, str(data.get("title") or payload.major_code), focus_skills, weekly, []
         )
-        return GuidancePersonalizationResponse(
-            major_code=payload.major_code,
-            personalization_summary=f"Sự cố kết nối AI API. Hệ thống kích hoạt lộ trình chuẩn hóa dự phòng cho ngành {major_name}.",
-            schedule=schedule,
-            is_fallback=True
-        )
+        schedule = [task.model_copy(update={"estimated_hours": per_week}) for task in schedule[:4]]
+
+    # Khi tài liệu có ít hơn bốn chủ đề, tuần còn lại dành cho ôn tập chủ đề
+    # đã có; đây là quy tắc lập lịch, không tuyên bố thêm nội dung học thuật.
+    while len(schedule) < 4:
+        previous = schedule[-1]
+        schedule.append(PersonalizedScheduleTask(
+            week_number=len(schedule) + 1, focus_skill=previous.focus_skill,
+            tasks=[f"Ôn lại nội dung: {previous.recommended_reading}", "Tự đánh giá phần đã học và ghi lại câu hỏi cần trao đổi với cố vấn."],
+            recommended_reading=previous.recommended_reading, estimated_hours=weekly,
+        ))
+
+    major_title = str(getattr(roadmap, "title", None) or data.get("title") or f"ngành {payload.major_code}")
+    status_text = gap.get("readiness_summary") if isinstance(gap, dict) else None
+    status_text = plain(status_text, 260) if isinstance(status_text, str) else ""
+    summary = (
+        f"Lộ trình 4 tuần cho {major_title}, phân bổ tối đa {weekly} giờ mỗi tuần "
+        f"theo dữ liệu khoảng trống kỹ năng đã ghi nhận."
+    )
+    if status_text:
+        summary += f" Mức sẵn sàng tham khảo: {status_text}."
+    if roadmap.is_fallback:
+        summary += " Đây là mẫu khám phá cần đối chiếu với chương trình của trường; chưa phải cam kết đầu ra."
+    else:
+        summary += f" Nguồn lộ trình: {plain(source_title, 160)}."
+    return GuidancePersonalizationResponse(
+        major_code=payload.major_code,
+        personalization_summary=summary[:4000],
+        schedule=schedule,
+        is_fallback=bool(roadmap.is_fallback),
+    )
 
 
 async def semantic_search_chunks(
@@ -233,7 +202,7 @@ async def semantic_search_chunks(
     Performs vector similarity search on knowledge_embeddings using pgvector.
     Supports metadata filtering by major_code and skill_id.
     """
-    query_vector = await get_text_embedding(request.query)
+    query_vector = await get_text_embedding(request.query, db=db)
     
     # Query pgvector using cosine distance
     query = select(
@@ -266,3 +235,60 @@ async def semantic_search_chunks(
         ))
         
     return search_results
+
+
+# =========================================================================
+# AI EXPLANATION ENGINE (ANONYMIZED ACADEMIC PROFILE ONLY - LAW 91/2025)
+# =========================================================================
+
+async def explain_recommendation_with_ai(db, payload: AIExplanationRequest, current_user_id=None) -> AIExplanationResponse:
+    """Render the same recommendation facts as Dashboard; no free-form model claims."""
+    from app.services.llamaindex_rag_orchestrator.guidance_boundary import guidance_facts, personal_facts, describe
+    facts = await guidance_facts(db, payload, current_user_id)
+    item = facts["items"].get(payload.major_code)
+    if item is None:
+        raise HTTPException(404, "Ngành không có trong danh mục đang hoạt động.")
+    detail = personal_facts(payload.major_code, facts)
+    return AIExplanationResponse(
+        major_code=item.major_code, major_name=item.major_name,
+        detailed_explanation="\n\n".join([describe(item.major_code, facts), detail["riasec"], detail["academic"], detail["cognitive"], detail["diagnostic"]]),
+        riasec_alignment=detail["riasec"], academic_alignment=detail["academic"],
+        diagnostic_readiness=detail["diagnostic"], strengths=detail["observed"],
+        recommended_focus_areas=detail["focus"], is_ai_generated=False,
+    )
+
+
+async def chat_with_career_counselor(db, payload: AIChatRequest, current_user_id=None) -> AIChatResponse:
+    """Only catalog facts and authorized evidence are rendered; text cannot invoke tools."""
+    from app.services.llamaindex_rag_orchestrator.guidance_boundary import (
+        guidance_facts, render_chat, forbidden_request, resolve_profile_owner, REDIRECT,
+    )
+    resolve_profile_owner(payload.user_id, current_user_id)
+    if payload.assessment_id and current_user_id is None:
+        raise HTTPException(401, "Đăng nhập để xem bản đánh giá đã lưu.")
+    from app.services.llamaindex_rag_orchestrator.counselor_connection import verify_receipt
+    connected = await verify_receipt(db, payload.connection_revision)
+    if forbidden_request(payload.message):
+        return AIChatResponse(reply=REDIRECT, suggested_followups=["Tìm hiểu ngành An toàn thông tin", "Cần bổ sung gì vào hồ sơ hướng nghiệp?"], is_fallback=False,
+                              connection_available=connected, connection_revision=payload.connection_revision if connected else None)
+    facts = await guidance_facts(db, payload, current_user_id)
+    reply, context, followups = render_chat(payload, facts)
+    connected = await verify_receipt(db, payload.connection_revision)
+    return AIChatResponse(reply=reply, suggested_followups=followups, context_major_code=context, is_fallback=False,
+                          connection_available=connected, connection_revision=payload.connection_revision if connected else None)
+
+
+async def get_llm_status(db):
+    """Compatibility facade: cùng nguồn DB với Admin, không đọc settings ghép trường."""
+    from app.services.ai_config.service import get_status
+    return await get_status(db)
+
+
+async def test_llm_connection(payload, db, actor_id):
+    from app.services.ai_config.service import probe_draft
+    return await probe_draft(db,payload,actor_id)
+
+
+async def update_llm_config(payload, db, actor_id):
+    from app.services.ai_config.service import apply_config
+    return await apply_config(db,payload,actor_id)

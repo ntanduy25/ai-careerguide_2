@@ -1,14 +1,15 @@
 from typing import List, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "backend/.env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
-        extra="ignore"
+        extra="ignore",
+        hide_input_in_errors=True
     )
 
     PROJECT_NAME: str = "AI CareerGuide Backend"
@@ -38,12 +39,37 @@ class Settings(BaseSettings):
     ARGON2_HASH_LEN: int = 32
     ARGON2_SALT_LEN: int = 16
 
-    # AI & Embedding Services
+    # Google OAuth 2.0 Credentials
+    GOOGLE_CLIENT_ID: str = "1095956825384-f8n2bj0ott0u1sokbegksf7n32tlpn51.apps.googleusercontent.com"
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:5173/login/callback"
+
+    # AI Assistant & LLM Services (Persona: Navi - AI CareerGuide)
+    AI_ASSISTANT_NAME: str = "Navi"
+    LLM_PROTOCOL: str = "openai_compatible"
+    LLM_AUTH_MODE: str = "BEARER"
+    AI_CONFIG_ENCRYPTION_KEY: str = ""
+    AI_CONFIG_ENCRYPTION_KEY_ID: str = "primary"
+    AI_LOCAL_ALLOWED_BASE_URLS: List[str] = []
+    AI_PROBE_LIMIT_PER_MINUTE: int = 6
+    LLM_API_KEY: str = ""
+    LLM_BASE_URL: str = "https://codex.fosta.app/v1"
+    LLM_MODEL: str = "gpt-6-luna"
+    LLM_TIMEOUT_SECONDS: float = Field(default=300.0, ge=1, le=600, allow_inf_nan=False)
+    LLM_MAX_TOKENS: int = Field(default=128000, ge=1, le=128000)
+    LLM_MAX_CONTEXT_TOKENS: int = Field(default=272000, ge=1024, le=272000)
+    LLM_MAX_CONTEXT_CHARS: int = Field(default=1000000, ge=1024, le=2000000)
+
+    # Legacy & Fallback Compatibility Settings
+    XKIRO_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://codex.fosta.app/v1"
+    XAI_API_KEY: str = ""
+    XAI_BASE_URL: str = "https://codex.fosta.app/v1"
+    VISION_LLM_MODEL: str = "mistralai/mistral-medium-3.5"
     TAVILY_API_KEY: str = ""
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIMENSION: int = 1536
-    LLM_MODEL: str = "gpt-4o-mini"
 
     # 3-Pillar Scoring Weights (Default: RIASEC 0.45, Academic 0.35, Preference 0.20)
     WEIGHT_RIASEC: float = 0.45
@@ -65,18 +91,42 @@ class Settings(BaseSettings):
     ]
 
     # CORS Configuration
-    CORS_ORIGINS: List[str] = [
+    CORS_ORIGINS: Union[str, List[str]] = [
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173"
     ]
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def assemble_database_url(cls, v: str) -> str:
+        if isinstance(v, str) and v:
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+                return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
+    @field_validator("LLM_TIMEOUT_SECONDS", "LLM_MAX_TOKENS", "LLM_MAX_CONTEXT_TOKENS", "LLM_MAX_CONTEXT_CHARS", mode="before")
+    @classmethod
+    def reject_boolean_ai_budgets(cls, value):
+        if isinstance(value, bool):
+            raise ValueError("Ngân sách AI phải là số, không nhận boolean.")
+        return value
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
+        if isinstance(v, str):
+            v_str = v.strip()
+            if v_str.startswith("["):
+                import json
+                try:
+                    return json.loads(v_str)
+                except Exception:
+                    pass
+            return [i.strip() for i in v_str.split(",") if i.strip()]
         elif isinstance(v, list):
             return v
         return [
@@ -87,6 +137,16 @@ class Settings(BaseSettings):
         ]
 
 
+
+
+
+    @model_validator(mode="after")
+    def require_production_signing_key(self):
+        if self.ENVIRONMENT.lower() in {"production", "prod"}:
+            key = self.SECRET_KEY
+            if len(key) < 32 or key == type(self).model_fields["SECRET_KEY"].default or any(marker in key.lower() for marker in ("change-me", "changeme", "your-secret", "placeholder")):
+                raise ValueError("Production yêu cầu SECRET_KEY riêng, ngẫu nhiên và dài ít nhất 32 ký tự.")
+        return self
 
 
 settings = Settings()

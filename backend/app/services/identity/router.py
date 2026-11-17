@@ -12,6 +12,9 @@ from app.schemas.identity import (
     UserResponse,
     UserConsentCreate,
     UserConsentResponse,
+    GoogleLoginRequest,
+    GoogleOAuthCallbackRequest,
+    UserProfileUpdateRequest,
 )
 from app.services.identity import service
 
@@ -37,6 +40,17 @@ async def get_current_profile(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.put("/profile", response_model=UserResponse)
+@router.put("/me", response_model=UserResponse)
+async def update_profile(
+    payload: UserProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Updates student profile information (gender, grade_level, school_class, school_name)."""
+    return await service.update_user_profile(db, current_user.id, payload)
+
+
 @router.post("/consent", response_model=UserConsentResponse)
 async def record_consent(
     payload: UserConsentCreate,
@@ -57,3 +71,17 @@ async def list_consents(
 ):
     """Retrieves all historical consent audit trails for the current user."""
     return await service.get_user_consents(db, current_user.id)
+
+
+@router.post("/google-login", response_model=TokenResponse)
+async def google_login(payload: GoogleLoginRequest, db: AsyncSession = Depends(get_db)):
+    """Authenticates or automatically registers a student via Google OAuth."""
+    return await service.authenticate_google_user(db, payload)
+
+@router.post("/google/callback", response_model=TokenResponse)
+async def google_oauth_callback(
+    payload: GoogleOAuthCallbackRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Handles standard Google OAuth 2.0 authorization code exchange callback."""
+    return await service.handle_google_oauth_callback(db, payload.code, payload.redirect_uri)
