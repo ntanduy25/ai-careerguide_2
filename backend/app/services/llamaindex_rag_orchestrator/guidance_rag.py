@@ -242,17 +242,60 @@ async def semantic_search_chunks(
 # =========================================================================
 
 async def explain_recommendation_with_ai(db, payload: AIExplanationRequest, current_user_id=None) -> AIExplanationResponse:
-    """Generate an intelligent personalized explanation grounded by 3-pillar data."""
+    """Generate an intelligent personalized explanation grounded by 3-pillar data with multi-tier caching and token optimization."""
+    import hashlib
+    import json
     from app.services.llamaindex_rag_orchestrator.guidance_boundary import guidance_facts, personal_facts, describe
+    from app.models.insight import MajorExplanationInsight
+
     facts = await guidance_facts(db, payload, current_user_id)
     item = facts["items"].get(payload.major_code)
     if item is None:
         raise HTTPException(404, "Ngành không có trong danh mục đang hoạt động.")
     detail = personal_facts(payload.major_code, facts)
 
+    profile = facts.get("profile") or {}
+    canonical_profile = {
+        "owner": str(current_user_id or "guest"),
+        "riasec_scores": profile.get("riasec_scores") or {},
+        "grades": profile.get("grades_by_subject") or {},
+        "cognitive": profile.get("cognitive_preferences") or {},
+        "aspiration": profile.get("aspiration") or {},
+    }
+    profile_hash = hashlib.sha256(
+        json.dumps(canonical_profile, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+    # 1. Check DB Cache first: 0 tokens, sub-millisecond response
+    if db is not None:
+        try:
+            cached_exp = (
+                await db.execute(
+                    select(MajorExplanationInsight).where(
+                        MajorExplanationInsight.profile_hash == profile_hash,
+                        MajorExplanationInsight.major_code == payload.major_code,
+                    )
+                )
+            ).scalar_one_or_none()
+            if cached_exp and cached_exp.is_ai_generated:
+                return AIExplanationResponse(
+                    major_code=cached_exp.major_code,
+                    major_name=cached_exp.major_name,
+                    detailed_explanation=cached_exp.detailed_explanation,
+                    riasec_alignment=cached_exp.riasec_alignment or detail["riasec"],
+                    academic_alignment=cached_exp.academic_alignment or detail["academic"],
+                    diagnostic_readiness=cached_exp.diagnostic_readiness or detail["diagnostic"],
+                    strengths=cached_exp.strengths or detail["observed"],
+                    recommended_focus_areas=cached_exp.recommended_focus_areas or detail["focus"],
+                    is_ai_generated=True,
+                )
+        except Exception as exc:
+            logger.warning("[AIExplanation] Cache read failed: %s", exc)
+
     static_explanation = "\n\n".join([describe(item.major_code, facts), detail["riasec"], detail["academic"], detail["cognitive"], detail["diagnostic"]])
     final_explanation = static_explanation
     is_ai = False
+    snapshot = None
 
     if db is not None:
         try:
@@ -260,29 +303,34 @@ async def explain_recommendation_with_ai(db, payload: AIExplanationRequest, curr
             from app.services.ai_config import adapter
 
             snapshot = await resolve_snapshot(db)
+
+            # Token Optimization: Extract concise signals instead of verbose boilerplate strings
+            riasec_score_pct = f"{getattr(item, 'score_riasec', 0) * 100:.0f}%"
+            academic_score_pct = f"{getattr(item, 'score_academic', 0) * 100:.0f}%"
+            match_score_str = f"{getattr(item, 'match_score', 0):.0f}/100"
+            grades_dict = profile.get("grades_by_subject") or {}
+            top_grades = ", ".join(f"{sub}: {gr}" for sub, gr in list(grades_dict.items())[:4]) or "Chưa nhập điểm cụ thể"
+
             system_prompt = (
-                "Bạn là Chuyên gia Cố vấn Hướng nghiệp AI của hệ thống AI CareerGuide.\n"
-                "Nhiệm vụ: Phân tích và giải thích ngắn gọn, súc tích, truyền cảm hứng và khách quan cho học sinh: "
-                f"**Vì sao ngành {item.major_name} ({item.major_code}) phù hợp với bạn?**\n\n"
-                "Dữ liệu đối chiếu chuẩn từ hệ thống:\n"
-                f"- Nhóm ngành: {item.category}\n"
-                f"- Mức độ phù hợp sở thích (Holland RIASEC): {detail['riasec']}\n"
-                f"- Năng lực học tập & tổ hợp xét tuyển: {detail['academic']}\n"
-                f"- Thiên hướng tự khai: {detail['cognitive']}\n"
-                f"- Kỹ năng chẩn đoán: {detail['diagnostic']}\n\n"
-                "Quy tắc phản hồi:\n"
-                "1. Viết bằng tiếng Việt tự nhiên, động viên, mang tính định hướng học tập thực tế.\n"
-                "2. Trình bày rõ ràng thành 2-3 đoạn ngắn hoặc gạch đầu dòng Markdown (nêu thế mạnh của học sinh, sự tương thích của ngành và các môn/kỹ năng cần chú trọng).\n"
-                "3. Tuyệt đối KHÔNG lặp lại nguyên văn các câu máy móc ('Đã có đủ bài sở thích...'), mà hãy diễn giải tự nhiên thành lời khuyên hữu ích.\n"
-                "4. Không tự bịa đặt điểm chuẩn giả hay hứa hẹn đỗ đại học."
+                "Bạn là Chuyên gia Cố vấn Hướng nghiệp AI CareerGuide.\n"
+                f"Nhiệm vụ: Phân tích ngắn gọn vì sao ngành **{item.major_name} ({item.major_code})** phù hợp với học sinh.\n\n"
+                "Thông số hồ sơ đối chiếu:\n"
+                f"- Khối ngành: {item.category}\n"
+                f"- Điểm khớp sở thích RIASEC: {riasec_score_pct}\n"
+                f"- Điểm khớp học lực: {academic_score_pct} (Các môn: {top_grades})\n"
+                f"- Điểm gợi ý tổng thể: {match_score_str}\n\n"
+                "Quy tắc tối ưu:\n"
+                "1. Trả lời súc tích trong 2-3 đoạn ngắn (tối đa 180-220 từ).\n"
+                "2. Nêu bật thế mạnh, lý do thực tế ngành phù hợp và môn/kỹ năng cần phát huy.\n"
+                "3. Viết tự nhiên, truyền cảm hứng, không dùng câu rập khuôn, không bịa điểm chuẩn hay hứa hẹn đỗ."
             )
             ai_text = await adapter.chat(
                 snapshot,
                 [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Hãy phân tích độ phù hợp của hồ sơ tôi với ngành {item.major_name} ({item.major_code})."}
+                    {"role": "user", "content": f"Giải thích ngắn gọn lý do ngành {item.major_name} ({item.major_code}) phù hợp với hồ sơ của tôi."}
                 ],
-                max_tokens=min(settings.LLM_MAX_TOKENS, 1200),
+                max_tokens=min(settings.LLM_MAX_TOKENS, 450),
                 timeout=min(settings.LLM_TIMEOUT_SECONDS, 45.0),
             )
             if ai_text and ai_text.strip():
@@ -290,6 +338,42 @@ async def explain_recommendation_with_ai(db, payload: AIExplanationRequest, curr
                 is_ai = True
         except Exception as exc:
             logger.warning("AI explanation synthesis failed, falling back to static facts: %s", exc)
+
+    # Persist into DB cache for 0 token reuse
+    if db is not None:
+        try:
+            stmt = select(MajorExplanationInsight).where(
+                MajorExplanationInsight.profile_hash == profile_hash,
+                MajorExplanationInsight.major_code == payload.major_code,
+            )
+            existing = (await db.execute(stmt)).scalar_one_or_none()
+            model_ident = getattr(snapshot, "model", None) if is_ai and snapshot else "deterministic-fallback"
+            save_payload = {
+                "user_id": current_user_id,
+                "profile_hash": profile_hash,
+                "major_code": payload.major_code,
+                "major_name": item.major_name,
+                "detailed_explanation": final_explanation,
+                "riasec_alignment": detail["riasec"],
+                "academic_alignment": detail["academic"],
+                "diagnostic_readiness": detail["diagnostic"],
+                "strengths": detail["observed"],
+                "recommended_focus_areas": detail["focus"],
+                "is_ai_generated": is_ai,
+                "model_name": model_ident,
+            }
+            if existing:
+                for k, v in save_payload.items():
+                    setattr(existing, k, v)
+            else:
+                db.add(MajorExplanationInsight(id=uuid.uuid4(), **save_payload))
+            await db.commit()
+        except Exception as exc:
+            logger.warning("[AIExplanation] Persist cache failed: %s", exc)
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 
     return AIExplanationResponse(
         major_code=item.major_code, major_name=item.major_name,

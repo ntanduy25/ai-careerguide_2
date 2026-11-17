@@ -170,14 +170,33 @@ export function MajorDetail() {
       })
 
     // 2. Agent "Phân tích ngành": nội dung đào tạo + vị trí nghề nghiệp (cache-first)
-    apiRequest<MajorInsight | null>(`/major-insights/${codeToLookup}`, null)
-      .then((insight) => {
-        if (mounted && insight) setMajorInsight(insight)
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (mounted) setInsightLoading(false)
-      })
+    const insightCacheKey = `careerguide:insight:${codeToLookup}`
+    const cachedInsightRaw = sessionStorage.getItem(insightCacheKey)
+    if (cachedInsightRaw) {
+      try {
+        const parsed = JSON.parse(cachedInsightRaw)
+        if (parsed) {
+          setMajorInsight(parsed)
+          setInsightLoading(false)
+        }
+      } catch {
+        sessionStorage.removeItem(insightCacheKey)
+      }
+    } else {
+      apiRequest<MajorInsight | null>(`/major-insights/${codeToLookup}`, null)
+        .then((insight) => {
+          if (mounted && insight) {
+            setMajorInsight(insight)
+            try {
+              sessionStorage.setItem(insightCacheKey, JSON.stringify(insight))
+            } catch {}
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (mounted) setInsightLoading(false)
+        })
+    }
 
     // 3. Agent "Phân tích kỹ năng": ưu/nhược điểm học tập + kỹ năng cần bổ sung
     if (hasUserAssessment) {
@@ -194,78 +213,89 @@ export function MajorDetail() {
           if (mounted && analysis) setSkillAnalysis(analysis)
         })
         .catch(() => {})
-      .finally(() => {
+        .finally(() => {
           if (mounted) setSkillLoading(false)
         })
     }
 
-    // 4. Automatically call AI Explanation API on page entry
-    apiRequest<AIExplanationApiPayload | null>(
-      "/rag-governance/explain-recommendation",
-      null,
-      {
-        method: "POST",
-        body: JSON.stringify({ ...evalPayload, major_code: codeToLookup }),
-      },
-    )
-      .then((aiRes) => {
-        if (!mounted || !aiRes) return
-        let cleanDetail = (aiRes.detailed_explanation || "").trim()
-        if (cleanDetail.startsWith("{")) {
+    // 4. Automatically call AI Explanation API on page entry (session-cached for instant 0-token navigation)
+    const explanationCacheKey = `careerguide:ai_explanation:${codeToLookup}:${user?.id || "guest"}:${JSON.stringify(evalPayload.riasec_answers || {})}:${JSON.stringify(evalPayload.grades_by_subject || {})}`
+    const cachedExplanation = sessionStorage.getItem(explanationCacheKey)
+    if (cachedExplanation) {
+      setAiExplanationText(cachedExplanation)
+      setAiExplaining(false)
+    } else {
+      apiRequest<AIExplanationApiPayload | null>(
+        "/rag-governance/explain-recommendation",
+        null,
+        {
+          method: "POST",
+          body: JSON.stringify({ ...evalPayload, major_code: codeToLookup }),
+        },
+      )
+        .then((aiRes) => {
+          if (!mounted || !aiRes) return
+          let cleanDetail = (aiRes.detailed_explanation || "").trim()
+          if (cleanDetail.startsWith("{")) {
+            try {
+              const parsed = JSON.parse(cleanDetail)
+              if (parsed.detailed_explanation) {
+                cleanDetail = String(parsed.detailed_explanation)
+              }
+            } catch {
+              const match = cleanDetail.match(
+                /"detailed_explanation"\s*:\s*"((?:\\"|[^"])*)"/,
+              )
+              if (match?.[1]) {
+                cleanDetail = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"')
+              }
+            }
+          }
+
+          const lines: string[] = []
+          if (cleanDetail) {
+            lines.push(cleanDetail)
+          }
+          if (!aiRes.is_ai_generated) {
+            if (!cleanDetail.includes("###") && !cleanDetail.includes("##")) {
+              lines.unshift("### Đối chiếu hồ sơ và ngành học", "")
+            }
+            if (aiRes.riasec_alignment) {
+              lines.push(`- **Sở thích nghề nghiệp:** ${aiRes.riasec_alignment}`)
+            }
+            if (aiRes.academic_alignment) {
+              lines.push(`- **Năng lực học tập:** ${aiRes.academic_alignment}`)
+            }
+            if (aiRes.strengths && aiRes.strengths.length > 0) {
+              lines.push(
+                `- **Điểm mạnh nổi bật:** ${aiRes.strengths.join(" · ")}`,
+              )
+            }
+          }
+          const formattedText = lines.join("\n\n")
+          setAiExplanationText(formattedText)
           try {
-            const parsed = JSON.parse(cleanDetail)
-            if (parsed.detailed_explanation) {
-              cleanDetail = String(parsed.detailed_explanation)
-            }
-          } catch {
-            const match = cleanDetail.match(
-              /"detailed_explanation"\s*:\s*"((?:\\"|[^"])*)"/,
-            )
-            if (match?.[1]) {
-              cleanDetail = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"')
-            }
-          }
-        }
+            sessionStorage.setItem(explanationCacheKey, formattedText)
+          } catch {}
 
-        const lines: string[] = []
-        if (cleanDetail) {
-          lines.push(cleanDetail)
-        }
-        if (!aiRes.is_ai_generated) {
-          if (!cleanDetail.includes("###") && !cleanDetail.includes("##")) {
-            lines.unshift("### Đối chiếu hồ sơ và ngành học", "")
+          if (
+            aiRes.recommended_focus_areas &&
+            aiRes.recommended_focus_areas.length > 0
+          ) {
+            setMajor((prev) => ({
+              ...prev,
+              gaps:
+                prev.gaps && prev.gaps.length > 0
+                  ? prev.gaps
+                  : aiRes.recommended_focus_areas!,
+            }))
           }
-          if (aiRes.riasec_alignment) {
-            lines.push(`- **Sở thích nghề nghiệp:** ${aiRes.riasec_alignment}`)
-          }
-          if (aiRes.academic_alignment) {
-            lines.push(`- **Năng lực học tập:** ${aiRes.academic_alignment}`)
-          }
-          if (aiRes.strengths && aiRes.strengths.length > 0) {
-            lines.push(
-              `- **Điểm mạnh nổi bật:** ${aiRes.strengths.join(" · ")}`,
-            )
-          }
-        }
-        setAiExplanationText(lines.join("\n\n"))
-
-        if (
-          aiRes.recommended_focus_areas &&
-          aiRes.recommended_focus_areas.length > 0
-        ) {
-          setMajor((prev) => ({
-            ...prev,
-            gaps:
-              prev.gaps && prev.gaps.length > 0
-                ? prev.gaps
-                : aiRes.recommended_focus_areas!,
-          }))
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (mounted) setAiExplaining(false)
-      })
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (mounted) setAiExplaining(false)
+        })
+    }
 
     return () => {
       mounted = false

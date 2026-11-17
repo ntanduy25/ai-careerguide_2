@@ -35,7 +35,7 @@ from app.models.assessment import (
 )
 from app.models.recommender import RecommendationHistory
 from app.models.roadmap import MajorRoadmap, StudentRoadmapProgress
-from app.models.insight import MajorInsight, StudentSkillInsight
+from app.models.insight import MajorInsight, StudentSkillInsight, MajorExplanationInsight
 from app.models.staging import StagingRecord, StagingStreamType, StagingStatus
 from app.models.vector import KnowledgeEmbedding
 
@@ -65,6 +65,7 @@ __all__ = [
     "StudentRoadmapProgress",
     "MajorInsight",
     "StudentSkillInsight",
+    "MajorExplanationInsight",
     "StagingRecord",
     "StagingStreamType",
     "StagingStatus",

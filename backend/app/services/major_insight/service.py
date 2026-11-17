@@ -167,7 +167,7 @@ async def get_or_create_major_insight(
             cached_entry = (
                 await db.execute(select(MajorInsight).where(MajorInsight.major_code == major_code))
             ).scalar_one_or_none()
-            if cached_entry and cached_entry.is_ai_generated:
+            if cached_entry and (cached_entry.is_ai_generated or cached_entry.model_name == model_name):
                 return _to_major_insight_response(cached_entry, cached=True)
         except Exception as exc:
             logger.warning("[MajorInsight] Cache read failed for %s: %s", major_code, exc)
@@ -357,7 +357,7 @@ async def analyze_student_skills(
                 StudentSkillInsight.major_code == major_code,
             )
             cached_entry = (await db.execute(stmt)).scalar_one_or_none()
-            if cached_entry and cached_entry.is_ai_generated:
+            if cached_entry and (cached_entry.is_ai_generated or cached_entry.model_name == "evidence-skills-v3"):
                 return _to_skill_response(cached_entry, cached=True)
         except Exception as exc:
             logger.warning("[SkillAgent] Cache read failed: %s", exc)

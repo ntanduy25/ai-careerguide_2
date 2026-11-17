@@ -464,6 +464,36 @@ class TestAIExplanationAndChatCounselor:
         assert "09" not in resp.detailed_explanation
 
     @pytest.mark.anyio
+    async def test_ai_explanation_database_caching(self, ai_runtime_db):
+        from app.schemas.rag import AIExplanationRequest
+        from app.services.llamaindex_rag_orchestrator.guidance_rag import explain_recommendation_with_ai
+        from app.models.insight import MajorExplanationInsight
+        from sqlalchemy import select
+
+        db = ai_runtime_db
+        await seed_major(db)
+
+        req = AIExplanationRequest(
+            major_code="7480201",
+            riasec_scores={"R": 0.85, "I": 0.90},
+            grades_by_subject={"math": 9.0},
+        )
+
+        resp1 = await explain_recommendation_with_ai(db, req)
+        assert resp1.major_code == "7480201"
+
+        # Check DB has cached record
+        stmt = select(MajorExplanationInsight).where(MajorExplanationInsight.major_code == "7480201")
+        cached = (await db.execute(stmt)).scalar_one_or_none()
+        assert cached is not None
+        assert cached.major_code == "7480201"
+        assert cached.detailed_explanation == resp1.detailed_explanation
+
+        # Second call returns cached content with 0 extra token overhead
+        resp2 = await explain_recommendation_with_ai(db, req)
+        assert resp2.detailed_explanation == resp1.detailed_explanation
+
+    @pytest.mark.anyio
     async def test_ai_counselor_chat_sanitizes_pii_and_responds(self, ai_runtime_db):
         from app.schemas.rag import AIChatRequest
         from app.services.llamaindex_rag_orchestrator.guidance_rag import chat_with_career_counselor

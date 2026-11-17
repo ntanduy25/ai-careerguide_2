@@ -3,7 +3,7 @@ from sqlalchemy import inspect, text
 from app.core.database import Base
 import app.models
 
-VERSIONS = ("20261116_001_base", "20261116_002_profile_columns", "20261116_003_ai_runtime")
+VERSIONS = ("20261116_001_base", "20261116_002_profile_columns", "20261116_003_ai_runtime", "20261117_004_major_explanation")
 
 async def migrate(engine):
     async with engine.begin() as conn:
@@ -27,4 +27,8 @@ async def migrate(engine):
             from app.models.ai_config import AIRuntimeConfig, AIConfigAudit
             await conn.run_sync(lambda c: Base.metadata.create_all(c,tables=[AIRuntimeConfig.__table__,AIConfigAudit.__table__]))
             await conn.execute(text("INSERT INTO schema_migrations(version) VALUES (:v)"),{"v":VERSIONS[2]})
+        if VERSIONS[3] not in applied:
+            from app.models.insight import MajorExplanationInsight
+            await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=[MajorExplanationInsight.__table__]))
+            await conn.execute(text("INSERT INTO schema_migrations(version) VALUES (:v)"), {"v": VERSIONS[3]})
         return list((await conn.execute(text("SELECT version FROM schema_migrations ORDER BY version"))).scalars())
