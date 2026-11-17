@@ -29,7 +29,7 @@ import { TrendBadge } from "../components/xai/TrendBadge"
 import { TwoTierFunnelRecommendation } from "../components/xai/TwoTierFunnelRecommendation"
 import { useAuth } from "../context/AuthContext"
 import { useAssessment } from "../hooks/useAssessment"
-import { apiRequest } from "../services/api"
+import { apiRequest, authPut } from "../services/api"
 import {
   riasecData as fallbackRiasec,
   type RiasecRadarPoint,
@@ -56,6 +56,15 @@ interface BestBlockStatsPayload {
 interface DashboardOverviewPayload {
   has_assessment?: boolean
   user_name?: string
+  gender?: string
+  grade_level?: string
+  horizon_label?: string
+  horizon_tau?: number
+  weights_applied?: {
+    w_riasec?: number
+    w_academic?: number
+    w_preference?: number
+  }
   riasecData?: RiasecRadarPoint[]
   bestBlockStats?: BestBlockStatsPayload | null
   scoreBarData?: Array<{ name: string; value: number }>
@@ -105,7 +114,7 @@ function formatDateTimeVi(iso?: string): string {
 }
 
 export function Dashboard() {
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
   const {
     assessment,
     history,
@@ -115,6 +124,24 @@ export function Dashboard() {
     selectHistoryAttempt,
     deleteHistoryAttempt,
   } = useAssessment()
+
+  const [selectedGradeLevel, setSelectedGradeLevel] = useState<string>(
+    () =>
+      user?.grade_level ||
+      localStorage.getItem("career-guide:profile:grade_level") ||
+      "Lớp 12",
+  )
+  const [selectedGender, setSelectedGender] = useState<string>(
+    () =>
+      user?.gender ||
+      localStorage.getItem("career-guide:profile:gender") ||
+      "Nam",
+  )
+
+  useEffect(() => {
+    if (user?.grade_level) setSelectedGradeLevel(user.grade_level)
+    if (user?.gender) setSelectedGender(user.gender)
+  }, [user?.grade_level, user?.gender])
 
   const activeAttemptIndex = useMemo(() => {
     if (!activeHistoryId) return 0
@@ -176,8 +203,8 @@ export function Dashboard() {
       setIsEvaluating(true)
       setIsAnalyzingAspiration(true)
       const payload = buildEvaluateProfilePayload(effectiveAssessment, 435, {
-        gender: user?.gender,
-        grade_level: user?.grade_level,
+        gender: selectedGender,
+        grade_level: selectedGradeLevel,
       })
       apiRequest<DashboardOverviewPayload | null>(
         "/recommender/evaluate",
@@ -222,10 +249,30 @@ export function Dashboard() {
   }, [
     hasCompletedAssessment,
     effectiveAssessment,
-    user?.gender,
-    user?.grade_level,
+    selectedGender,
+    selectedGradeLevel,
     activeHistoryId,
   ])
+
+  const handleUpdateProfileContext = (
+    nextGradeLevel: string,
+    nextGender: string,
+  ) => {
+    setSelectedGradeLevel(nextGradeLevel)
+    setSelectedGender(nextGender)
+    localStorage.setItem("career-guide:profile:grade_level", nextGradeLevel)
+    localStorage.setItem("career-guide:profile:gender", nextGender)
+    if (user) {
+      updateUser({ grade_level: nextGradeLevel, gender: nextGender })
+      void authPut("/identity/profile", {
+        full_name: user.name,
+        gender: nextGender,
+        grade_level: nextGradeLevel,
+        school_class: user.school_class || "",
+        school_name: user.school_name || "",
+      }).catch(() => {})
+    }
+  }
 
   // Agent "Phân tích kỹ năng": ưu/nhược điểm học tập + kỹ năng cần bổ sung
   // (cache theo hồ sơ năng lực ở backend nên chỉ tốn AI lần đầu).
@@ -274,7 +321,7 @@ export function Dashboard() {
     try {
       const response = await apiRequest<DashboardOverviewPayload | null>("/recommender/evaluate", null, {
         method: "POST",
-        body: JSON.stringify(buildEvaluateProfilePayload({ ...snapshot, aspiration: nextAspiration }, 435, { gender: user?.gender, grade_level: user?.grade_level })),
+        body: JSON.stringify(buildEvaluateProfilePayload({ ...snapshot, aspiration: nextAspiration }, 435, { gender: selectedGender, grade_level: selectedGradeLevel })),
       })
       if (request !== aspirationRequest.current || profileRef.current !== snapshot) throw new Error("Hồ sơ đã đổi")
       if (!response?.aspirationAnalysis) throw new Error("Chưa có phân tích")
@@ -622,6 +669,11 @@ export function Dashboard() {
                 <TwoTierFunnelRecommendation
                   funnelData={activeFunnel}
                   isLoading={isEvaluating && (!activeFunnel.tier1_fields || activeFunnel.tier1_fields.length === 0)}
+                  activeGradeLevel={selectedGradeLevel}
+                  activeGender={selectedGender}
+                  horizonLabel={data?.horizon_label || activeFunnel.horizon_label}
+                  weightsApplied={data?.weights_applied}
+                  onUpdateProfileContext={handleUpdateProfileContext}
                 />
               </div>
             </div>

@@ -21,6 +21,10 @@ interface GoogleLoginApiResponse {
     email: string
     full_name: string
     role: string
+    gender?: string
+    grade_level?: string
+    school_class?: string
+    school_name?: string
   }
 }
 
@@ -68,7 +72,20 @@ export function GoogleCallback() {
     requestRef.current.then(data => {
       if (!mounted || !data.access_token || !data.user) return
       const mappedRole: UserRole = data.user.role.toUpperCase() === "ADMIN" ? "admin" : "student"
-      login(mappedRole, { id: String(data.user.id), name: data.user.full_name, email: data.user.email, role: mappedRole }, data.access_token)
+      login(
+        mappedRole,
+        {
+          id: String(data.user.id),
+          name: data.user.full_name,
+          email: data.user.email,
+          role: mappedRole,
+          gender: data.user.gender || "Nam",
+          grade_level: data.user.grade_level || "Lớp 12",
+          school_class: data.user.school_class,
+          school_name: data.user.school_name,
+        },
+        data.access_token,
+      )
       setIsSuccess(true)
       navigate(mappedRole === "admin" ? "/admin" : "/dashboard", { replace: true })
     }).catch((error: unknown) => {

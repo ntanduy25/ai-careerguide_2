@@ -19,11 +19,28 @@ import { TrendBadge } from "./TrendBadge"
 interface TwoTierFunnelProps {
   funnelData: FunnelRecommendationData
   isLoading?: boolean
+  activeGradeLevel?: string
+  activeGender?: string
+  horizonLabel?: string
+  weightsApplied?: {
+    w_riasec?: number
+    w_academic?: number
+    w_preference?: number
+  }
+  onUpdateProfileContext?: (gradeLevel: string, gender: string) => void
 }
+
+const GRADE_OPTIONS = ["Lớp 10", "Lớp 11", "Lớp 12", "Đã tốt nghiệp cấp 3"]
+const GENDER_OPTIONS = ["Nam", "Nữ", "Khác"]
 
 export function TwoTierFunnelRecommendation({
   funnelData,
   isLoading = false,
+  activeGradeLevel = "Lớp 12",
+  activeGender = "Nam",
+  horizonLabel,
+  weightsApplied,
+  onUpdateProfileContext,
 }: TwoTierFunnelProps) {
   const fields = funnelData.tier1_fields || []
   const [selectedFieldIndex, setSelectedFieldIndex] = useState<number | "ALL">(
@@ -104,8 +121,129 @@ export function TwoTierFunnelRecommendation({
       ? fields
       : [fields[selectedFieldIndex] || fields[0]].filter(Boolean)
 
+  const resolvedHorizonLabel =
+    horizonLabel ||
+    funnelData.horizon_label ||
+    (activeGradeLevel.includes("10")
+      ? "Giai đoạn Định hướng Sớm & Tích lũy (Lớp 10)"
+      : activeGradeLevel.includes("11")
+        ? "Giai đoạn Tăng tốc & Thu hẹp Trọng tâm (Lớp 11)"
+        : activeGradeLevel.toLowerCase().includes("tốt nghiệp")
+          ? "Thí sinh Tự do & Hướng nghiệp Thực tế"
+          : "Giai đoạn Nước rút Thực chiến (Lớp 12)")
+
+  const wRiasecPct =
+    weightsApplied?.w_riasec != null
+      ? Math.round(weightsApplied.w_riasec * 100)
+      : activeGradeLevel.includes("10")
+        ? 50
+        : activeGradeLevel.includes("11")
+          ? 47
+          : 43
+  const wAcadPct =
+    weightsApplied?.w_academic != null
+      ? Math.round(weightsApplied.w_academic * 100)
+      : activeGradeLevel.includes("10")
+        ? 25
+        : activeGradeLevel.includes("11")
+          ? 32
+          : 40
+  const wPrefPct =
+    weightsApplied?.w_preference != null
+      ? Math.round(weightsApplied.w_preference * 100)
+      : Math.max(0, 100 - wRiasecPct - wAcadPct)
+
   return (
     <div className="space-y-6">
+      {/* HA-GAE v3.1: Grade-Level Horizon & Gender Personalization Banner */}
+      <div className="rounded-3xl border border-sky-200/80 bg-white/80 p-4 shadow-xs backdrop-blur-xl sm:p-5">
+        <div className="flex flex-col justify-between gap-3.5 xl:flex-row xl:items-center">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100/90 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-sky-800">
+                <Sparkles size={12} className="text-sky-600" />
+                Đề xuất theo Khối lớp & Giới tính
+              </span>
+              <span className="text-xs font-bold text-slate-800">
+                {resolvedHorizonLabel}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600">
+              Trọng số thích ứng:{" "}
+              <strong className="font-semibold text-sky-700">
+                {wRiasecPct}% Sở thích
+              </strong>{" "}
+              ·{" "}
+              <strong className="font-semibold text-sky-700">
+                {wAcadPct}% Học lực
+              </strong>{" "}
+              ·{" "}
+              <strong className="font-semibold text-cyan-700">
+                {wPrefPct}% Tự khai
+              </strong>{" "}
+              <span className="text-slate-400">|</span> Giới tính:{" "}
+              <strong className="font-semibold text-slate-800">
+                {activeGender}
+              </strong>{" "}
+              {activeGender === "Nữ"
+                ? "(Khuyến khích Nữ sinh STEM & điều kiện công thái học)"
+                : activeGender === "Nam"
+                  ? "(Mở rộng Kỹ thuật mũi nhọn & khuyến khích Giáo dục/Y tế)"
+                  : "(Môi trường đa dạng & bình đẳng cơ hội)"}
+            </p>
+          </div>
+
+          {onUpdateProfileContext && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200/90 bg-slate-50/90 p-1">
+                {GRADE_OPTIONS.map((gOpt) => {
+                  const isSelected = activeGradeLevel === gOpt
+                  const shortLabel = gOpt.includes("Đã tốt nghiệp")
+                    ? "Đã tốt nghiệp"
+                    : gOpt
+                  return (
+                    <button
+                      key={gOpt}
+                      type="button"
+                      onClick={() => onUpdateProfileContext(gOpt, activeGender)}
+                      className={`rounded-xl px-2.5 py-1 text-xs font-bold transition ${
+                        isSelected
+                          ? "bg-sky-600 text-white shadow-2xs"
+                          : "text-slate-600 hover:bg-white hover:text-sky-700"
+                      }`}
+                    >
+                      {shortLabel}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200/90 bg-slate-50/90 p-1">
+                {GENDER_OPTIONS.map((genOpt) => {
+                  const isSelected = activeGender === genOpt
+                  return (
+                    <button
+                      key={genOpt}
+                      type="button"
+                      onClick={() =>
+                        onUpdateProfileContext(activeGradeLevel, genOpt)
+                      }
+                      className={`rounded-xl px-2.5 py-1 text-xs font-bold transition ${
+                        isSelected
+                          ? "bg-sky-600 text-white shadow-2xs"
+                          : "text-slate-600 hover:bg-white hover:text-sky-700"
+                      }`}
+                    >
+                      {genOpt}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <p className="text-xs leading-relaxed text-slate-500">Điểm gợi ý được tính theo quy tắc tham khảo, không phải xác suất trúng tuyển. Dấu — là chưa đủ dữ liệu; phong cách tự khai không đo mức thành thạo kỹ năng.</p>
       {/* TIER 1 SELECTOR: Top 3 Fields */}
       <div>
@@ -219,6 +357,53 @@ export function TwoTierFunnelRecommendation({
                                   value={major.feasibility}
                                   label={major.feasibility_label}
                                 />
+                                {major.best_matching_block &&
+                                  major.best_block_score != null && (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-sky-200/90 bg-sky-50/90 px-2.5 py-1 text-xs font-semibold text-sky-800">
+                                      <GraduationCap
+                                        size={13}
+                                        className="text-sky-600"
+                                      />
+                                      {formatBlockWithSubjects(
+                                        major.best_matching_block,
+                                        {
+                                          short: true,
+                                          includePrefix: false,
+                                        },
+                                      )}
+                                      : {major.best_block_score}đ
+                                      {major.benchmark_cutoff
+                                        ? ` (Chuẩn ~${major.benchmark_cutoff}đ)`
+                                        : ""}
+                                    </span>
+                                  )}
+                                {major.admission_tactic &&
+                                  major.admission_tactic !==
+                                    "Đối chiếu phương thức tuyển sinh" && (
+                                    <span
+                                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                        major.admission_tactic.includes("NV1-2")
+                                          ? "border border-amber-200 bg-amber-50 text-amber-800"
+                                          : major.admission_tactic.includes(
+                                                "NV6+",
+                                              )
+                                            ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                                            : "border border-sky-200 bg-sky-50/80 text-sky-800"
+                                      }`}
+                                    >
+                                      <Target size={12} />
+                                      {major.admission_tactic}
+                                    </span>
+                                  )}
+                                {major.nudge_badge && (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50/90 px-2.5 py-1 text-xs font-semibold text-cyan-800">
+                                    <Sparkles
+                                      size={12}
+                                      className="text-cyan-600"
+                                    />
+                                    {major.nudge_badge}
+                                  </span>
+                                )}
                                 <TrendBadge
                                   tier={major.trend_tier}
                                   isTrending={major.is_trending}
@@ -294,6 +479,13 @@ export function TwoTierFunnelRecommendation({
                                 </div>
                               </div>
                             </div>
+                          )}
+
+                          {/* Personalized XAI Explanation by Grade Level & Gender */}
+                          {major.explanation && (
+                            <p className="mt-3 rounded-2xl border border-slate-200/70 bg-slate-50/70 px-3.5 py-2.5 text-xs leading-relaxed text-slate-700">
+                              {major.explanation}
+                            </p>
                           )}
 
                           {/* Progressive Disclosure: Collapsible Admissions & Strategy Section */}

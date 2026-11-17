@@ -149,9 +149,59 @@ def _exact_block_results(validated_scores: Dict[str, Any]) -> Dict[str, Any]:
     return blocks
 
 
-def _publish_readiness(item: MajorRecommendationItem) -> None:
+def _publish_readiness(item: MajorRecommendationItem, *, preserve_complete_feasibility: bool = False) -> None:
     """Heuristic rank is not an admission decision; publish only checked evidence."""
     evidence = item.readiness
+    has_explicit_ref = evidence.get("reason") != "REFERENCE_BASIS_MISSING"
+    available = item.score_breakdown.get("pillar_availability", {})
+    item.fit = {
+        "interest": round(item.score_riasec * 100) if available.get("w_riasec") else None,
+        "academic": round(item.score_academic * 100) if available.get("w_academic") else None,
+        "cognitive": round(item.score_preference * 100) if available.get("w_preference") else None,
+    }
+    interest_known = item.score_breakdown.get("interest_evidence_status") == "COMPLETE"
+    item.match = round(item.overall_score * 100) if interest_known and any(available.values()) else None
+    item.score_breakdown["suitability_status"] = "OBSERVED_INTEREST_FIT" if interest_known else "UNDETERMINED"
+    if not interest_known:
+        item.score_breakdown["score_meaning"] = "PARTIAL_EVIDENCE_RANK_ONLY"
+    item.gaps = item.competency_gaps[:3]
+
+    if preserve_complete_feasibility and interest_known and not has_explicit_ref:
+        item.feasibility = item.feasibility_tier
+        item.university = (
+            format_block_with_subjects(item.best_matching_block)
+            if item.best_matching_block
+            else "Cần đối chiếu trường và phương thức tuyển sinh"
+        )
+        if item.best_block_score is not None and item.feasibility_tier in ("TARGET", "SAFETY", "SAFE"):
+            evidence.update({
+                "status": "READY_REFERENCE",
+                "reason": "REFERENCE_MET",
+                "block": item.best_matching_block,
+                "block_score": item.best_block_score,
+                "benchmark_cutoff": item.benchmark_cutoff,
+                "min_recommended": item.min_recommended,
+                "violations": list(item.constraint_violations or []),
+                "message": item.admission_advice or "Đạt mốc điểm chuẩn tham chiếu của ngành.",
+            })
+        elif item.feasibility_tier == "REACH":
+            evidence.update({
+                "status": "NEEDS_IMPROVEMENT",
+                "reason": "BELOW_REFERENCE_OR_CONSTRAINT",
+                "block": item.best_matching_block,
+                "block_score": item.best_block_score,
+                "benchmark_cutoff": item.benchmark_cutoff,
+                "min_recommended": item.min_recommended,
+                "violations": list(item.constraint_violations or []),
+                "message": item.admission_advice or "Cần cải thiện thêm điểm số hoặc điều kiện môn tiên quyết.",
+            })
+        item.score_breakdown["feasibility"] = evidence
+        item.academic_tier = item.feasibility_tier
+        item.academic_tier_label = item.feasibility_label
+        if not item.advisory_note:
+            item.advisory_note = item.admission_advice
+        return
+
     from decimal import Decimal, InvalidOperation
     try:
         thresholds = [Decimal(str(evidence[k])) for k in ("benchmark_cutoff", "min_recommended") if evidence.get(k) is not None]
@@ -178,15 +228,6 @@ def _publish_readiness(item: MajorRecommendationItem) -> None:
     item.admission_tactic = "Đối chiếu phương thức tuyển sinh" if not ready else "Lựa chọn đạt mốc tham chiếu"
     item.advisory_note = item.admission_advice
     item.nudge_badge = None
-    available = item.score_breakdown.get("pillar_availability", {})
-    item.fit = {"interest": round(item.score_riasec * 100) if available.get("w_riasec") else None,
-                "academic": round(item.score_academic * 100) if available.get("w_academic") else None,
-                "cognitive": round(item.score_preference * 100) if available.get("w_preference") else None}
-    interest_known = item.score_breakdown.get("interest_evidence_status") == "COMPLETE"
-    item.match = round(item.overall_score * 100) if interest_known and any(available.values()) else None
-    item.score_breakdown["suitability_status"] = "OBSERVED_INTEREST_FIT" if interest_known else "UNDETERMINED"
-    if not interest_known:
-        item.score_breakdown["score_meaning"] = "PARTIAL_EVIDENCE_RANK_ONLY"
     interest_note = (f"Mức tương đồng sở thích: {item.fit['interest']}%. " if available.get("w_riasec")
                      else "Sở thích chưa phân hóa hoặc chưa đủ câu trả lời để kết luận mức phù hợp. ")
     cognitive_note = (f"Tương đồng thiên hướng tự khai: {item.fit['cognitive']}%; không phải đo năng lực. "
@@ -196,7 +237,6 @@ def _publish_readiness(item: MajorRecommendationItem) -> None:
     item.score_breakdown["feasibility"] = evidence
     item.academic_tier = evidence.get("status", "UNKNOWN")
     item.academic_tier_label = item.feasibility_label
-    item.gaps = item.competency_gaps[:3]
 
 
 
@@ -773,27 +813,131 @@ async def calculate_3pillar_recommendations(
             admission_tactic=init_tactic,
         ))
 
-    # All candidates receive authoritative readiness BEFORE any top-k selection.
-    for item in scored_items:
-        _publish_readiness(item)
     from .aspiration_agent import _resolve_intent
-    match_status, _, goals = _resolve_intent(
-        aspiration.get("dream_job", aspiration.get("dreamJob", "")),
-        aspiration.get("desired_field", aspiration.get("desiredField", "")), scored_items, seed_by_code)
-    goal_codes = {item.major_code for item in goals} if match_status == "MATCHED" else set()
-    for item in scored_items:
-        item.score_breakdown["aspiration_relation"] = "DIRECT_GOAL" if item.major_code in goal_codes else "OTHER"
-    def order(item):
-        tier = {"TARGET": 0, "UNKNOWN": 1, "REACH": 2}[item.feasibility_tier]
-        margin = item.score_gap if item.score_gap is not None else float("-inf")
-        return (tier, 0 if item.major_code in goal_codes else 1,
+    interest_complete = interest_evidence["status"] == "COMPLETE"
+    has_explicit_refs = any(m.readiness.get("reason") != "REFERENCE_BASIS_MISSING" for m in scored_items)
+
+    if interest_complete and not has_explicit_refs:
+        # 1. Smart Sibling / Pathway Substitution for blocked high-cutoff majors
+        eligible_targets = [it for it in scored_items if it.feasibility_tier == "TARGET"]
+        blocked_reaches = [it for it in scored_items if it.feasibility_tier == "REACH"]
+        blocked_reaches.sort(
+            key=lambda it: (0.70 * it.score_riasec + 0.30 * it.score_preference),
+            reverse=True,
+        )
+        substituted_codes = set()
+        for blocked in blocked_reaches[:6]:
+            if blocked.score_riasec < 0.65:
+                continue
+            best_sub: Optional[MajorRecommendationItem] = None
+            best_sub_metric = -1.0
+            best_rel_tier = 0
+            for cand in eligible_targets:
+                if cand.major_code in substituted_codes:
+                    continue
+                rel_tier = are_majors_related_pathway(blocked.major_code, cand.major_code)
+                if rel_tier > 0 and cand.score_riasec >= 0.60:
+                    metric = (rel_tier * 0.25) + (cand.score_riasec * 0.50) + (cand.overall_score * 0.25)
+                    if metric > best_sub_metric:
+                        best_sub_metric = metric
+                        best_sub = cand
+                        best_rel_tier = rel_tier
+            if best_sub is not None:
+                substituted_codes.add(best_sub.major_code)
+                pathway_desc = (
+                    "cùng nhóm ngành"
+                    if best_rel_tier == 3
+                    else (
+                        "cùng lĩnh vực / nhánh Công nghệ Kỹ thuật ứng dụng"
+                        if best_rel_tier == 2
+                        else "nhóm ngành liên thông gần gũi"
+                    )
+                )
+                sub_msg = (
+                    f"Đề xuất thay thế vừa sức cho ngành {blocked.major_name} (điểm chuẩn ~{blocked.benchmark_cutoff}đ): "
+                    f"Giữ trọn định hướng sở thích ({round(best_sub.score_riasec * 100, 1)}%) thuộc {pathway_desc} "
+                    f"nhưng có ngưỡng điểm an toàn (~{best_sub.benchmark_cutoff}đ)."
+                )
+                best_sub.admission_advice = sub_msg
+                best_sub.top_supporting_factors.insert(0, sub_msg)
+
+        # 2. HA-GAE v3.1 Tái xếp hạng thích ứng Khối lớp (Lớp 10/11/12/Tốt nghiệp) & Giới tính
+        has_academic = has_any_grades and any(v is not None and v > 0 for v in norm_raw_grades.values())
+        effective_top_k = len(scored_items) if include_all_candidates else payload.top_k
+        top_results = apply_horizon_gender_reranking(
+            scored_items=scored_items,
+            grade_level=student_grade_level,
+            gender=student_gender,
+            top_k=effective_top_k,
+            has_academic_scores=has_academic,
+            target_trending_top5=1,
+            target_trending_top10=2,
+            student_riasec_dict=student_riasec,
+        )
+        if include_all_candidates and len(top_results) < len(scored_items):
+            included_codes = {it.major_code for it in top_results}
+            for extra in scored_items:
+                if extra.major_code not in included_codes:
+                    top_results.append(extra)
+                    included_codes.add(extra.major_code)
+
+        for item in scored_items:
+            item.explanation = build_horizon_gender_xai_explanation(
+                major_name=item.major_name,
+                major_code=item.major_code,
+                category=item.category or "",
+                score_riasec=item.score_riasec,
+                score_academic=item.score_academic,
+                score_pref=item.score_preference,
+                feasibility_tier=item.feasibility_tier,
+                grade_level=student_grade_level,
+                gender=student_gender,
+                best_matching_block=item.best_matching_block,
+                score_gap=item.score_gap,
+            )
+            _publish_readiness(item, preserve_complete_feasibility=True)
+
+        match_status, _, goals = _resolve_intent(
+            aspiration.get("dream_job", aspiration.get("dreamJob", "")),
+            aspiration.get("desired_field", aspiration.get("desiredField", "")),
+            scored_items,
+            seed_by_code,
+        )
+        goal_codes = {item.major_code for item in goals} if match_status == "MATCHED" else set()
+        for item in scored_items:
+            item.score_breakdown["aspiration_relation"] = "DIRECT_GOAL" if item.major_code in goal_codes else "OTHER"
+        for rank, item in enumerate(top_results, 1):
+            item.rank = rank
+    else:
+        # All candidates receive authoritative readiness BEFORE any top-k selection.
+        for item in scored_items:
+            _publish_readiness(item, preserve_complete_feasibility=False)
+        match_status, _, goals = _resolve_intent(
+            aspiration.get("dream_job", aspiration.get("dreamJob", "")),
+            aspiration.get("desired_field", aspiration.get("desiredField", "")),
+            scored_items,
+            seed_by_code,
+        )
+        goal_codes = {item.major_code for item in goals} if match_status == "MATCHED" else set()
+        for item in scored_items:
+            item.score_breakdown["aspiration_relation"] = "DIRECT_GOAL" if item.major_code in goal_codes else "OTHER"
+
+        def order(item):
+            tier = {"TARGET": 0, "UNKNOWN": 1, "REACH": 2}[item.feasibility_tier]
+            margin = item.score_gap if item.score_gap is not None else float("-inf")
+            return (
+                tier,
+                0 if item.major_code in goal_codes else 1,
                 -margin if strategy == "REALISTIC_SAFE" and tier == 0 else 0,
-                -item.overall_score, item.major_code)
-    top_results = sorted(scored_items, key=order)
-    if not include_all_candidates:
-        top_results = [item for item in top_results if item.feasibility_tier != "REACH"][:payload.top_k]
-    for rank, item in enumerate(top_results, 1):
-        item.rank = rank
+                -item.overall_score,
+                item.major_code,
+            )
+
+        top_results = sorted(scored_items, key=order)
+        if not include_all_candidates:
+            top_results = [item for item in top_results if item.feasibility_tier != "REACH"][:payload.top_k]
+        for rank, item in enumerate(top_results, 1):
+            item.rank = rank
 
     # Summary weights describe observed profile evidence; each item's weights are authoritative.
     _, summary_weights = score_observed_pillars(
@@ -931,26 +1075,43 @@ def build_two_tier_funnel_payload(
     from app.services.taxonomy.trend_agent import get_trend_rank_boost
 
     horizon_cfg = get_grade_horizon_config(grade_level)
+    tau = float(horizon_cfg.get("tau", 0.25))
 
     groups: Dict[str, List[MajorRecommendationItem]] = defaultdict(list)
     raw_cat_by_key: Dict[str, str] = {}
-    has_non_reach = any(m.feasibility_tier != "REACH" for m in recommendations)
     for item in recommendations:
-        if has_non_reach and item.feasibility_tier == "REACH":
-            continue
+        if item.feasibility_tier == "REACH":
+            if tau < 0.65 or item.admission_tactic == "Nguy cơ cao":
+                continue
         cat = item.category or "Khác"
         key = _canonical_field_key(cat)
         if key not in raw_cat_by_key:
             raw_cat_by_key[key] = cat
         groups[key].append(item)
 
+    if not groups and recommendations:
+        for item in recommendations:
+            if item.admission_tactic == "Nguy cơ cao":
+                continue
+            cat = item.category or "Khác"
+            key = _canonical_field_key(cat)
+            if key not in raw_cat_by_key:
+                raw_cat_by_key[key] = cat
+            groups[key].append(item)
+
     tier1_fields: List[Dict[str, Any]] = []
     for key, items in groups.items():
         cat_name = raw_cat_by_key[key]
         display_name = _format_vietnamese_field_name(cat_name)
-        sorted_items = sorted(items, key=lambda m: (m.feasibility_tier != "TARGET", m.rank))
+        if tau >= 0.65:
+            sorted_items = sorted(items, key=lambda m: (m.admission_tactic == "Nguy cơ cao", m.rank))
+        else:
+            sorted_items = sorted(items, key=lambda m: (m.feasibility_tier != "TARGET", m.rank))
         sample_top = sorted_items[:majors_per_field]
-        target_cnt = sum(1 for m in items if m.readiness.get("status") == "READY_REFERENCE")
+        target_cnt = sum(
+            1 for m in items
+            if m.readiness.get("status") == "READY_REFERENCE" or m.feasibility_tier == "TARGET"
+        )
         avg_score = sum(m.overall_score for m in sample_top) / len(sample_top)
         max_trend_boost = max(
             (get_trend_rank_boost(m.trend_tier, m.overall_score) for m in sample_top),
@@ -1080,7 +1241,7 @@ async def evaluate_dashboard_profile_bundle(
         interest_evidence=interest_evidence,
     )
 
-    visible_majors = [item for item in rec_resp.recommendations if item.feasibility_tier != "REACH"] or rec_resp.recommendations
+    visible_majors = [item for item in rec_resp.recommendations if item.feasibility_tier != "REACH"]
     return {
         "has_assessment": True,
         "has_academic_data": has_academic_data,
