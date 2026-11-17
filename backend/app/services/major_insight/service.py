@@ -64,6 +64,79 @@ def build_deterministic_major_insight(ctx: Dict[str, Any]) -> Tuple[TrainingCont
     return training, careers, False
 
 
+async def build_ai_major_insight(db: Optional[AsyncSession], ctx: Dict[str, Any]) -> Tuple[TrainingContent, List[CareerPosition], bool]:
+    if db is None:
+        return build_deterministic_major_insight(ctx)
+    try:
+        from app.services.ai_config.service import resolve_snapshot
+        from app.services.ai_config import adapter
+        from app.core.config import settings
+
+        snapshot = await resolve_snapshot(db)
+        name = ctx["name"]
+        code = ctx.get("code") or ctx.get("major_code", "")
+        category = ctx.get("category", "")
+        existing_careers = ctx.get("careers") or []
+
+        system_prompt = (
+            "Bạn là Chuyên gia Cố vấn Học thuật & Hướng nghiệp Đại học tại Việt Nam.\n"
+            f"Nhiệm vụ: Cung cấp thông tin thực tế, chuyên nghiệp và chi tiết về chương trình đào tạo và cơ hội nghề nghiệp cho ngành: **{name} (Mã ngành: {code}, Nhóm ngành: {category})**.\n"
+            "Hãy trả về JSON object thuần túy (không kèm code block ```) theo đúng cấu trúc sau:\n"
+            "{\n"
+            '  "overview": "Mô tả 2-3 câu tổng quan về ngành, mục tiêu đào tạo và ứng dụng thực tế.",\n'
+            '  "core_knowledge": ["3-4 môn học hoặc khối kiến thức nền tảng và chuyên ngành cốt lõi"],\n'
+            '  "practical_skills": ["3-4 kỹ năng thực hành, công cụ hoặc kỹ năng nghề nghiệp quan trọng"],\n'
+            '  "curriculum_highlights": ["2 điểm nổi bật về định hướng chương trình đào tạo"],\n'
+            '  "study_duration": "4 năm (Cử nhân) hoặc 4.5 - 5 năm (Kỹ sư)",\n'
+            '  "career_positions": [\n'
+            '    {"title": "Tên chức danh nghề nghiệp 1", "description": "Mô tả công việc thực tế", "career_level": "Chuyên viên / Khởi điểm"},\n'
+            '    {"title": "Tên chức danh 2", "description": "Mô tả công việc thực tế", "career_level": "Chuyên gia / Quản lý"}\n'
+            "  ]\n"
+            "}"
+        )
+        raw = await adapter.chat(
+            snapshot,
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Hãy tạo nội dung đào tạo và vị trí nghề nghiệp cho ngành {name}."},
+            ],
+            max_tokens=min(settings.LLM_MAX_TOKENS, 2048),
+            timeout=min(settings.LLM_TIMEOUT_SECONDS, 45.0),
+            response_format={"type": "json_object"},
+        )
+        data = json.loads(raw)
+        overview = str(data.get("overview") or "").strip()
+        core_knowledge = [str(k).strip() for k in data.get("core_knowledge", []) if str(k).strip()][:5]
+        practical_skills = [str(s).strip() for s in data.get("practical_skills", []) if str(s).strip()][:5]
+        curriculum_highlights = [str(h).strip() for h in data.get("curriculum_highlights", []) if str(h).strip()][:3]
+        study_duration = str(data.get("study_duration") or "4 năm (theo quy chế đào tạo đại học)").strip()
+
+        positions: List[CareerPosition] = []
+        for p in data.get("career_positions", []):
+            if isinstance(p, dict) and p.get("title"):
+                positions.append(CareerPosition(
+                    title=str(p["title"])[:100],
+                    description=str(p.get("description") or f"Vị trí chuyên môn ngành {name}")[:300],
+                    career_level=str(p.get("career_level") or "Chuyên viên")[:50],
+                ))
+        if not positions and existing_careers:
+            positions = [CareerPosition(title=str(t), description=f"Vị trí việc làm ngành {name}", career_level="Chuyên viên") for t in existing_careers[:5]]
+
+        if overview and (core_knowledge or practical_skills):
+            training = TrainingContent(
+                overview=overview[:600],
+                core_knowledge=core_knowledge or ["Kiến thức nền tảng và chuyên ngành"],
+                practical_skills=practical_skills or ["Kỹ năng thực hành chuyên môn"],
+                curriculum_highlights=curriculum_highlights or ["Chương trình chuẩn theo quy định"],
+                study_duration=study_duration[:100],
+            )
+            return training, positions, True
+    except Exception as exc:
+        logger.warning("[MajorInsight] AI generation failed for %s: %s", ctx.get("name"), exc)
+
+    return build_deterministic_major_insight(ctx)
+
+
 def _to_major_insight_response(entry: MajorInsight, cached: bool) -> MajorInsightResponse:
     training_data = entry.training_content or {}
     return MajorInsightResponse(
@@ -94,12 +167,12 @@ async def get_or_create_major_insight(
             cached_entry = (
                 await db.execute(select(MajorInsight).where(MajorInsight.major_code == major_code))
             ).scalar_one_or_none()
-            if cached_entry and cached_entry.model_name == model_name and not cached_entry.is_ai_generated:
+            if cached_entry and cached_entry.is_ai_generated:
                 return _to_major_insight_response(cached_entry, cached=True)
         except Exception as exc:
             logger.warning("[MajorInsight] Cache read failed for %s: %s", major_code, exc)
 
-    training, career_positions, is_ai = build_deterministic_major_insight(ctx)
+    training, career_positions, is_ai = await build_ai_major_insight(db, ctx)
     now = datetime.now(timezone.utc)
 
     if db is None:
@@ -284,13 +357,70 @@ async def analyze_student_skills(
                 StudentSkillInsight.major_code == major_code,
             )
             cached_entry = (await db.execute(stmt)).scalar_one_or_none()
-            if cached_entry and not cached_entry.is_ai_generated:
+            if cached_entry and cached_entry.is_ai_generated:
                 return _to_skill_response(cached_entry, cached=True)
         except Exception as exc:
             logger.warning("[SkillAgent] Cache read failed: %s", exc)
 
     summary, strengths, weaknesses, gaps = build_deterministic_skill_analysis(payload, major_name)
     is_ai = False
+
+    if db is not None and major_name:
+        try:
+            from app.services.ai_config.service import resolve_snapshot
+            from app.services.ai_config import adapter
+            from app.core.config import settings
+
+            snapshot = await resolve_snapshot(db)
+            scores_text = ", ".join(f"{k}: {v}" for k, v in (payload.grades_by_subject or {}).items()) or "Chưa nhập điểm cụ thể"
+            riasec_text = ", ".join(f"{k}: {v}" for k, v in (payload.riasec_scores or {}).items()) or "Chưa có điểm sở thích"
+
+            system_prompt = (
+                "Bạn là Chuyên gia Cố vấn Kỹ năng & Lộ trình Học tập của hệ thống AI CareerGuide.\n"
+                f"Nhiệm vụ: Phân tích kỹ năng và khoảng trống năng lực của học sinh đối với ngành **{major_name}**.\n"
+                f"- Dữ liệu điểm học lực: {scores_text}\n"
+                f"- Dữ liệu sở thích Holland: {riasec_text}\n\n"
+                "Hãy trả về JSON object thuần túy theo đúng cấu trúc sau:\n"
+                "{\n"
+                '  "summary": "Tóm tắt 1-2 câu ngắn gọn về thế mạnh và năng lực của học sinh đối với ngành này.",\n'
+                '  "strengths": [{"title": "Tên điểm mạnh nổi bật", "detail": "Giải thích ngắn gọn"}],\n'
+                '  "weaknesses": [{"title": "Môn học hoặc điểm cần ôn tập", "detail": "Giải thích ngắn gọn"}],\n'
+                '  "skill_gaps": [\n'
+                '    {"skill": "Tên kỹ năng chuyên môn cốt lõi cần rèn luyện cho ngành này", "why": "Lý do kỹ năng này cần thiết", "how_to_improve": ["Cách tự rèn luyện 1", "Cách tự học 2"], "priority": "HIGH"}\n'
+                '  ]\n'
+                "}"
+            )
+            raw = await adapter.chat(
+                snapshot,
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Hãy phân tích kỹ năng và gợi ý rèn luyện cho tôi với ngành {major_name}."},
+                ],
+                max_tokens=min(settings.LLM_MAX_TOKENS, 1500),
+                timeout=min(settings.LLM_TIMEOUT_SECONDS, 45.0),
+                response_format={"type": "json_object"},
+            )
+            ai_data = json.loads(raw)
+            ai_summary = str(ai_data.get("summary") or "").strip()
+            ai_strengths = [InsightPoint(title=str(p.get("title") or "")[:80], detail=str(p.get("detail") or "")[:200]) for p in ai_data.get("strengths", []) if isinstance(p, dict) and p.get("title")][:3]
+            ai_weaknesses = [InsightPoint(title=str(p.get("title") or "")[:80], detail=str(p.get("detail") or "")[:200]) for p in ai_data.get("weaknesses", []) if isinstance(p, dict) and p.get("title")][:3]
+            ai_gaps = []
+            for g in ai_data.get("skill_gaps", []):
+                if isinstance(g, dict) and g.get("skill"):
+                    ai_gaps.append(SkillGapItem(
+                        skill=str(g["skill"])[:100],
+                        why=str(g.get("why") or f"Kỹ năng quan trọng cho ngành {major_name}")[:250],
+                        how_to_improve=[str(h) for h in g.get("how_to_improve", []) if str(h).strip()][:3] or ["Tìm hiểu tài liệu chuyên ngành", "Thực hành bài tập thực tế"],
+                        priority=g.get("priority") if g.get("priority") in {"HIGH", "MEDIUM", "LOW"} else "HIGH",
+                    ))
+            if ai_summary and (ai_strengths or ai_gaps):
+                summary = ai_summary
+                strengths = ai_strengths or strengths
+                weaknesses = ai_weaknesses or weaknesses
+                gaps = ai_gaps or gaps
+                is_ai = True
+        except Exception as exc:
+            logger.warning("[SkillAgent] AI skill analysis failed for %s: %s", major_name, exc)
 
     if db is None:
         return StudentSkillAnalysisResponse(

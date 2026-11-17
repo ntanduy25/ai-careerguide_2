@@ -934,8 +934,9 @@ def build_two_tier_funnel_payload(
 
     groups: Dict[str, List[MajorRecommendationItem]] = defaultdict(list)
     raw_cat_by_key: Dict[str, str] = {}
+    has_non_reach = any(m.feasibility_tier != "REACH" for m in recommendations)
     for item in recommendations:
-        if item.feasibility_tier == "REACH":
+        if has_non_reach and item.feasibility_tier == "REACH":
             continue
         cat = item.category or "Khác"
         key = _canonical_field_key(cat)
@@ -1079,7 +1080,7 @@ async def evaluate_dashboard_profile_bundle(
         interest_evidence=interest_evidence,
     )
 
-    visible_majors = [item for item in rec_resp.recommendations if item.feasibility_tier != "REACH"]
+    visible_majors = [item for item in rec_resp.recommendations if item.feasibility_tier != "REACH"] or rec_resp.recommendations
     return {
         "has_assessment": True,
         "has_academic_data": has_academic_data,

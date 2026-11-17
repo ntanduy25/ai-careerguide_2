@@ -228,24 +228,26 @@ export function MajorDetail() {
         }
 
         const lines: string[] = []
-        if (!cleanDetail.includes("###") && !cleanDetail.includes("##")) {
-          lines.push("### Đối chiếu hồ sơ và ngành học", "")
-        }
         if (cleanDetail) {
-          lines.push(cleanDetail, "")
+          lines.push(cleanDetail)
         }
-        if (aiRes.riasec_alignment) {
-          lines.push(`- **Sở thích nghề nghiệp:** ${aiRes.riasec_alignment}`)
+        if (!aiRes.is_ai_generated) {
+          if (!cleanDetail.includes("###") && !cleanDetail.includes("##")) {
+            lines.unshift("### Đối chiếu hồ sơ và ngành học", "")
+          }
+          if (aiRes.riasec_alignment) {
+            lines.push(`- **Sở thích nghề nghiệp:** ${aiRes.riasec_alignment}`)
+          }
+          if (aiRes.academic_alignment) {
+            lines.push(`- **Năng lực học tập:** ${aiRes.academic_alignment}`)
+          }
+          if (aiRes.strengths && aiRes.strengths.length > 0) {
+            lines.push(
+              `- **Điểm mạnh nổi bật:** ${aiRes.strengths.join(" · ")}`,
+            )
+          }
         }
-        if (aiRes.academic_alignment) {
-          lines.push(`- **Năng lực học tập:** ${aiRes.academic_alignment}`)
-        }
-        if (aiRes.strengths && aiRes.strengths.length > 0) {
-          lines.push(
-            `- **Điểm mạnh nổi bật:** ${aiRes.strengths.join(" · ")}`,
-          )
-        }
-        setAiExplanationText(lines.join("\n"))
+        setAiExplanationText(lines.join("\n\n"))
 
         if (
           aiRes.recommended_focus_areas &&

@@ -242,19 +242,61 @@ async def semantic_search_chunks(
 # =========================================================================
 
 async def explain_recommendation_with_ai(db, payload: AIExplanationRequest, current_user_id=None) -> AIExplanationResponse:
-    """Render the same recommendation facts as Dashboard; no free-form model claims."""
+    """Generate an intelligent personalized explanation grounded by 3-pillar data."""
     from app.services.llamaindex_rag_orchestrator.guidance_boundary import guidance_facts, personal_facts, describe
     facts = await guidance_facts(db, payload, current_user_id)
     item = facts["items"].get(payload.major_code)
     if item is None:
         raise HTTPException(404, "Ngành không có trong danh mục đang hoạt động.")
     detail = personal_facts(payload.major_code, facts)
+
+    static_explanation = "\n\n".join([describe(item.major_code, facts), detail["riasec"], detail["academic"], detail["cognitive"], detail["diagnostic"]])
+    final_explanation = static_explanation
+    is_ai = False
+
+    if db is not None:
+        try:
+            from app.services.ai_config.service import resolve_snapshot
+            from app.services.ai_config import adapter
+
+            snapshot = await resolve_snapshot(db)
+            system_prompt = (
+                "Bạn là Chuyên gia Cố vấn Hướng nghiệp AI của hệ thống AI CareerGuide.\n"
+                "Nhiệm vụ: Phân tích và giải thích ngắn gọn, súc tích, truyền cảm hứng và khách quan cho học sinh: "
+                f"**Vì sao ngành {item.major_name} ({item.major_code}) phù hợp với bạn?**\n\n"
+                "Dữ liệu đối chiếu chuẩn từ hệ thống:\n"
+                f"- Nhóm ngành: {item.category}\n"
+                f"- Mức độ phù hợp sở thích (Holland RIASEC): {detail['riasec']}\n"
+                f"- Năng lực học tập & tổ hợp xét tuyển: {detail['academic']}\n"
+                f"- Thiên hướng tự khai: {detail['cognitive']}\n"
+                f"- Kỹ năng chẩn đoán: {detail['diagnostic']}\n\n"
+                "Quy tắc phản hồi:\n"
+                "1. Viết bằng tiếng Việt tự nhiên, động viên, mang tính định hướng học tập thực tế.\n"
+                "2. Trình bày rõ ràng thành 2-3 đoạn ngắn hoặc gạch đầu dòng Markdown (nêu thế mạnh của học sinh, sự tương thích của ngành và các môn/kỹ năng cần chú trọng).\n"
+                "3. Tuyệt đối KHÔNG lặp lại nguyên văn các câu máy móc ('Đã có đủ bài sở thích...'), mà hãy diễn giải tự nhiên thành lời khuyên hữu ích.\n"
+                "4. Không tự bịa đặt điểm chuẩn giả hay hứa hẹn đỗ đại học."
+            )
+            ai_text = await adapter.chat(
+                snapshot,
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Hãy phân tích độ phù hợp của hồ sơ tôi với ngành {item.major_name} ({item.major_code})."}
+                ],
+                max_tokens=min(settings.LLM_MAX_TOKENS, 1200),
+                timeout=min(settings.LLM_TIMEOUT_SECONDS, 45.0),
+            )
+            if ai_text and ai_text.strip():
+                final_explanation = ai_text.strip()
+                is_ai = True
+        except Exception as exc:
+            logger.warning("AI explanation synthesis failed, falling back to static facts: %s", exc)
+
     return AIExplanationResponse(
         major_code=item.major_code, major_name=item.major_name,
-        detailed_explanation="\n\n".join([describe(item.major_code, facts), detail["riasec"], detail["academic"], detail["cognitive"], detail["diagnostic"]]),
+        detailed_explanation=final_explanation,
         riasec_alignment=detail["riasec"], academic_alignment=detail["academic"],
         diagnostic_readiness=detail["diagnostic"], strengths=detail["observed"],
-        recommended_focus_areas=detail["focus"], is_ai_generated=False,
+        recommended_focus_areas=detail["focus"], is_ai_generated=is_ai,
     )
 
 
