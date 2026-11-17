@@ -106,7 +106,13 @@ def forbidden_request(message: str) -> bool:
 def in_scope(message: str, codes: list[str], history=None) -> bool:
     text = fold(message)
     # A selected major alone must not turn unrelated requests into career requests.
-    terms = ("nganh", "nghe", "hoc", "viec lam", "huong nghiep", "tuyen sinh", "diem", "holland", "riasec", "tu duy", "ky nang", "so thich", "phu hop", "nguyen vong", "thu nhap", "hoc phi", "gia dinh", "dia phuong", "suc khoe", "ke hoach", "lo trinh", "career", "major", "study", "university", "school", "skill", "job", "scholarship")
+    terms = (
+        "nganh", "nghe", "hoc", "viec lam", "huong nghiep", "tuyen sinh", "diem", "holland",
+        "riasec", "tu duy", "ky nang", "so thich", "phu hop", "nguyen vong", "thu nhap", "hoc phi",
+        "gia dinh", "dia phuong", "suc khoe", "ke hoach", "lo trinh", "career", "major", "study",
+        "university", "school", "skill", "job", "scholarship", "chao", "xin chao", "hi", "hello",
+        "alo", "tu van", "giup", "hoi"
+    )
     if codes or any(re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", text) for t in terms):
         return True
     return bool(history and re.fullmatch(r"\s*(con|va|tai sao|vi sao|cu the|them|nganh do|nghe do|no|why|more|how)(.{0,30})[?!. ]*", text))

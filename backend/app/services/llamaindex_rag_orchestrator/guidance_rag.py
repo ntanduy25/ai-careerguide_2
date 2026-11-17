@@ -259,23 +259,96 @@ async def explain_recommendation_with_ai(db, payload: AIExplanationRequest, curr
 
 
 async def chat_with_career_counselor(db, payload: AIChatRequest, current_user_id=None) -> AIChatResponse:
-    """Only catalog facts and authorized evidence are rendered; text cannot invoke tools."""
+    """Combines authoritative catalog facts with conversational LLM generation."""
     from app.services.llamaindex_rag_orchestrator.guidance_boundary import (
         guidance_facts, render_chat, forbidden_request, resolve_profile_owner, REDIRECT,
     )
+    from app.services.llamaindex_rag_orchestrator.counselor_connection import verify_receipt
+    from app.services.ai_config.service import resolve_snapshot
+    from app.services.ai_config import adapter
+
     resolve_profile_owner(payload.user_id, current_user_id)
     if payload.assessment_id and current_user_id is None:
         raise HTTPException(401, "Đăng nhập để xem bản đánh giá đã lưu.")
-    from app.services.llamaindex_rag_orchestrator.counselor_connection import verify_receipt
+
     connected = await verify_receipt(db, payload.connection_revision)
     if forbidden_request(payload.message):
-        return AIChatResponse(reply=REDIRECT, suggested_followups=["Tìm hiểu ngành An toàn thông tin", "Cần bổ sung gì vào hồ sơ hướng nghiệp?"], is_fallback=False,
-                              connection_available=connected, connection_revision=payload.connection_revision if connected else None)
+        return AIChatResponse(
+            reply=REDIRECT,
+            suggested_followups=["Tìm hiểu ngành An toàn thông tin", "Cần bổ sung gì vào hồ sơ hướng nghiệp?"],
+            is_fallback=False,
+            is_ai_generated=False,
+            response_source="verified_guidance",
+            connection_available=connected,
+            connection_revision=payload.connection_revision if connected else None,
+        )
+
     facts = await guidance_facts(db, payload, current_user_id)
-    reply, context, followups = render_chat(payload, facts)
+    static_reply, context, followups = render_chat(payload, facts)
     connected = await verify_receipt(db, payload.connection_revision)
-    return AIChatResponse(reply=reply, suggested_followups=followups, context_major_code=context, is_fallback=False,
-                          connection_available=connected, connection_revision=payload.connection_revision if connected else None)
+
+    if connected:
+        try:
+            snapshot = await resolve_snapshot(db)
+            system_instruction = (
+                "Bạn là Cố vấn AI Hướng nghiệp thông minh, thân thiện và tận tâm của hệ thống AI CareerGuide.\n"
+                "Nhiệm vụ: Tư vấn, giải đáp câu hỏi của học sinh/sinh viên về định hướng nghề nghiệp, các ngành học, "
+                "mức độ phù hợp với sở thích/năng lực, và xây dựng lộ trình học tập.\n\n"
+                "Quy tắc phản hồi:\n"
+                "1. Trả lời bằng tiếng Việt tự nhiên, nhiệt tình, súc tích, mạch lạc, giọng điệu khuyến khích và truyền cảm hứng.\n"
+                "2. Sử dụng thông tin từ [DỮ LIỆU THAM CHIẾU HỆ THỐNG] dưới đây làm căn cứ chuẩn xác "
+                "(về tên ngành, mã ngành, chuẩn đầu ra, điểm tham chiếu tuyển sinh, kết quả sở thích Holland nếu có). "
+                "Tuyệt đối KHÔNG tự bịa đặt thông tin tuyển sinh sai lệch.\n"
+                "3. Trả lời trực tiếp vào trọng tâm câu hỏi của người dùng (ví dụ: giải thích ngắn gọn bản chất ngành nghề, so sánh các ngành liên quan, hoặc hướng dẫn lộ trình), "
+                "tránh lặp lại nguyên văn tiêu đề kỹ thuật hay khuôn mẫu khô cứng của hệ thống.\n"
+                "4. Định dạng Markdown rõ ràng (dùng gạch đầu dòng, in đậm tên ngành hoặc từ khóa quan trọng) để học sinh dễ đọc."
+            )
+
+            grounding = f"[DỮ LIỆU THAM CHIẾU HỆ THỐNG]:\n{static_reply}"
+            messages = [{"role": "system", "content": f"{system_instruction}\n\n{grounding}"}]
+
+            if payload.history:
+                for entry in payload.history[-6:]:
+                    if entry.content and entry.role in {"user", "assistant"}:
+                        clean_content = sanitize_pii(entry.content)
+                        if clean_content.strip():
+                            messages.append({"role": entry.role, "content": clean_content[:1500]})
+
+            user_msg = sanitize_pii(payload.message).strip()
+            messages.append({"role": "user", "content": user_msg})
+
+            ai_reply = await adapter.chat(
+                snapshot,
+                messages,
+                max_tokens=min(settings.LLM_MAX_TOKENS, 2048),
+                timeout=min(settings.LLM_TIMEOUT_SECONDS, 60.0),
+            )
+
+            if ai_reply and ai_reply.strip():
+                connected_after = await verify_receipt(db, payload.connection_revision)
+                return AIChatResponse(
+                    reply=ai_reply.strip(),
+                    suggested_followups=followups,
+                    context_major_code=context,
+                    is_fallback=False,
+                    is_ai_generated=True,
+                    response_source="ai_advisor",
+                    connection_available=connected_after,
+                    connection_revision=payload.connection_revision if connected_after else None,
+                )
+        except Exception as exc:
+            logger.warning("LLM synthesis failed in career chat, falling back to static guidance: %s", exc)
+
+    return AIChatResponse(
+        reply=static_reply,
+        suggested_followups=followups,
+        context_major_code=context,
+        is_fallback=False,
+        is_ai_generated=False,
+        response_source="verified_guidance",
+        connection_available=connected,
+        connection_revision=payload.connection_revision if connected else None,
+    )
 
 
 async def get_llm_status(db):

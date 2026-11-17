@@ -150,7 +150,7 @@ class AIChatResponse(BaseModel):
     context_major_code: Optional[str] = None
     is_fallback: bool = False
     is_ai_generated: bool = False
-    response_source: Literal["verified_guidance"] = "verified_guidance"
+    response_source: Literal["verified_guidance", "ai_advisor", "offline_guidance"] = "verified_guidance"
     connection_available: bool = False
     connection_revision: Optional[str] = None
 
