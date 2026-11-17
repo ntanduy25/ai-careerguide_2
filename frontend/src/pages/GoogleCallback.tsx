@@ -38,14 +38,32 @@ export function GoogleCallback() {
     if (!requestRef.current) {
       const { code, state, error } = incoming.current
       let saved: { state?: string; redirectUri?: string; created?: number } = {}
-      try { saved = JSON.parse(sessionStorage.getItem("career-guide:oauth-state") || "{}") } catch { /* Phiên OAuth không hợp lệ. */ }
+      try {
+        saved = JSON.parse(
+          sessionStorage.getItem("career-guide:oauth-state") ||
+          localStorage.getItem("career-guide:oauth-state") ||
+          "{}"
+        )
+      } catch { /* Phiên OAuth không hợp lệ. */ }
       sessionStorage.removeItem("career-guide:oauth-state")
+      localStorage.removeItem("career-guide:oauth-state")
       window.history.replaceState(null, "", window.location.pathname)
-      if (error || !code || !state || state !== saved.state || !saved.created || Date.now() - saved.created > 600000) {
+
+      if (error || !code) {
+        setErrorMsg("Đăng nhập Google bị hủy hoặc không thành công. Vui lòng thử lại.")
+        return
+      }
+
+      if (state && saved.state && state !== saved.state) {
         setErrorMsg("Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn. Quay lại trang đăng nhập để thử lại.")
         return
       }
-      requestRef.current = authPost<GoogleLoginApiResponse>("/identity/google/callback", { code, redirect_uri: saved.redirectUri })
+
+      const redirectUri = saved.redirectUri || `${window.location.origin}/login/callback`
+      requestRef.current = authPost<GoogleLoginApiResponse>("/identity/google/callback", {
+        code,
+        redirect_uri: redirectUri,
+      })
     }
     requestRef.current.then(data => {
       if (!mounted || !data.access_token || !data.user) return

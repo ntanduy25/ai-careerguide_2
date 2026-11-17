@@ -1,5 +1,6 @@
 import uuid
 import math
+import logging
 from typing import Optional, List
 from datetime import datetime, timezone
 from fastapi import HTTPException, status
@@ -23,6 +24,9 @@ from app.schemas.identity import (
     GoogleLoginRequest,
     UserProfileUpdateRequest,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _authentication_unavailable() -> HTTPException:
@@ -163,16 +167,20 @@ async def _verify_google_id_token(credential: str) -> dict:
     try:
         header = jwt.get_unverified_header(credential)
         if header.get("alg") != "RS256" or not isinstance(header.get("kid"), str) or not 1 <= len(header["kid"]) <= 128:
+            logger.warning("[GoogleAuth] Invalid token header: %s", header)
             raise invalid
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=False) as client:
             response = await client.get("https://www.googleapis.com/oauth2/v3/certs")
         if response.status_code != 200:
+            logger.warning("[GoogleAuth] Google certs status %d", response.status_code)
             raise HTTPException(503, "Không thể xác minh Google lúc này. Vui lòng thử lại.")
         keys = response.json().get("keys", [])
         if not isinstance(keys, list) or len(keys) > 20:
+            logger.warning("[GoogleAuth] Unexpected keys payload: %s", keys)
             raise invalid
         matching = [key for key in keys if isinstance(key, dict) and key.get("kid") == header["kid"] and key.get("kty") == "RSA"]
         if len(matching) != 1:
+            logger.warning("[GoogleAuth] No matching RSA key found for kid: %s", header.get("kid"))
             raise invalid
         public_key = jwt.PyJWK.from_dict(matching[0], algorithm="RS256").key
         claims = jwt.decode(
@@ -180,21 +188,34 @@ async def _verify_google_id_token(credential: str) -> dict:
             public_key,
             algorithms=["RS256"],
             audience=settings.GOOGLE_CLIENT_ID,
+            leeway=60,
             options={"require": ["sub", "exp", "iat", "iss", "aud"]},
         )
         if claims.get("iss") not in ("accounts.google.com", "https://accounts.google.com"):
+            logger.warning("[GoogleAuth] Invalid issuer: %s", claims.get("iss"))
             raise invalid
-        if claims.get("aud") != settings.GOOGLE_CLIENT_ID or claims.get("azp", settings.GOOGLE_CLIENT_ID) != settings.GOOGLE_CLIENT_ID:
+        aud = claims.get("aud")
+        valid_aud = aud == settings.GOOGLE_CLIENT_ID or (isinstance(aud, (list, tuple)) and settings.GOOGLE_CLIENT_ID in aud)
+        if not valid_aud:
+            logger.warning("[GoogleAuth] Invalid audience: %s != %s", aud, settings.GOOGLE_CLIENT_ID)
+            raise invalid
+        azp = claims.get("azp")
+        if azp is not None and azp != settings.GOOGLE_CLIENT_ID:
+            logger.warning("[GoogleAuth] Invalid azp: %s != %s", azp, settings.GOOGLE_CLIENT_ID)
             raise invalid
         if not isinstance(claims.get("sub"), str) or not 1 <= len(claims["sub"]) <= 255 or claims.get("email_verified") is not True:
+            logger.warning("[GoogleAuth] Invalid sub or email_verified: sub=%s, email_verified=%s", claims.get("sub"), claims.get("email_verified"))
             raise invalid
         if any(isinstance(claims[key], bool) or not isinstance(claims[key], (int, float)) or not math.isfinite(claims[key]) for key in ("exp", "iat")) or claims["iat"] > claims["exp"]:
+            logger.warning("[GoogleAuth] Non-finite or inconsistent exp/iat: iat=%s, exp=%s", claims.get("iat"), claims.get("exp"))
             raise invalid
         claims["email"] = str(TypeAdapter(EmailStr).validate_python(claims.get("email"))).lower().strip()
         return claims
-    except httpx.HTTPError:
+    except httpx.HTTPError as exc:
+        logger.warning("[GoogleAuth] HTTP error fetching Google certs: %s", exc)
         raise HTTPException(503, "Không thể xác minh Google lúc này. Vui lòng thử lại.") from None
-    except (jwt.PyJWTError, ValueError, TypeError, KeyError, AttributeError, OverflowError, ValidationError):
+    except (jwt.PyJWTError, ValueError, TypeError, KeyError, AttributeError, OverflowError, ValidationError) as exc:
+        logger.warning("[GoogleAuth] Token verification failed: %s (%s)", type(exc).__name__, exc)
         raise invalid from None
 
 
@@ -247,8 +268,16 @@ async def handle_google_oauth_callback(
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(503, "Đăng nhập Google chưa được cấu hình.")
     target_redirect_uri = redirect_uri or settings.GOOGLE_REDIRECT_URI
-    # postmessage là redirect cố định của Google Identity Services popup code flow.
-    if target_redirect_uri not in (settings.GOOGLE_REDIRECT_URI, "postmessage"):
+    allowed_redirects = {
+        settings.GOOGLE_REDIRECT_URI,
+        "postmessage",
+        "http://localhost:5173/login/callback",
+        "http://127.0.0.1:5173/login/callback",
+        "http://localhost:3000/login/callback",
+        "http://127.0.0.1:3000/login/callback",
+    }
+    if target_redirect_uri not in allowed_redirects:
+        logger.warning("[GoogleAuth] Disallowed redirect URI: %s", target_redirect_uri)
         raise HTTPException(400, "Địa chỉ callback Google không được cho phép.")
     try:
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
@@ -260,12 +289,17 @@ async def handle_google_oauth_callback(
                 "grant_type": "authorization_code",
             })
         if response.status_code != 200:
+            logger.warning("[GoogleAuth] Google code exchange failed (%d): %s", response.status_code, response.text)
             raise HTTPException(400, "Mã đăng nhập Google không hợp lệ hoặc đã hết hạn.")
-        credential = response.json().get("id_token")
+        data = response.json()
+        credential = data.get("id_token")
         if not isinstance(credential, str) or not credential:
+            logger.warning("[GoogleAuth] Response missing id_token: %s", list(data.keys()) if isinstance(data, dict) else "not-dict")
             raise HTTPException(502, "Google không trả về ID token hợp lệ.")
-    except httpx.HTTPError:
+    except httpx.HTTPError as exc:
+        logger.warning("[GoogleAuth] Network error exchanging code: %s", exc)
         raise HTTPException(503, "Không thể kết nối Google lúc này. Vui lòng thử lại.") from None
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError) as exc:
+        logger.warning("[GoogleAuth] Error parsing Google response: %s", exc)
         raise HTTPException(502, "Phản hồi xác thực Google không hợp lệ.") from None
     return await authenticate_google_user(db, GoogleLoginRequest(credential=credential))

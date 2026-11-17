@@ -40,11 +40,13 @@ function redirectToGoogleOAuth() {
     import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID
   const redirectUri =
     import.meta.env.VITE_GOOGLE_REDIRECT_URI ||
-    "http://localhost:5173/login/callback"
+    `${window.location.origin}/login/callback`
 
   const oauthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth"
   const state = crypto.randomUUID()
-  sessionStorage.setItem("career-guide:oauth-state", JSON.stringify({ state, redirectUri, created: Date.now() }))
+  const payload = JSON.stringify({ state, redirectUri, created: Date.now() })
+  sessionStorage.setItem("career-guide:oauth-state", payload)
+  localStorage.setItem("career-guide:oauth-state", payload)
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -84,16 +86,16 @@ function GoogleSignInButton({
       }
     },
     onError: () => {
-      // Fallback to standard OAuth 2.0 redirect flow if popup fails or origin is 127.0.0.1
+      // Fallback to standard OAuth 2.0 redirect flow if popup fails or is blocked
       redirectToGoogleOAuth()
     },
   })
 
   const handleClick = () => {
     // Google Cloud Console Web Client ID whitelists http://localhost:5173
-    // If accessed via 127.0.0.1, use the standard OAuth 2.0 redirect flow directly
+    // If accessed via 127.0.0.1, switch to localhost to unify origins and cookies
     if (window.location.hostname === "127.0.0.1") {
-      redirectToGoogleOAuth()
+      window.location.href = window.location.href.replace("127.0.0.1", "localhost")
       return
     }
     googlePopupLogin()

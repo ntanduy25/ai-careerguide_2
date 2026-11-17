@@ -37,6 +37,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     generation.current += 1
     localStorage.removeItem("career-guide:user")
     localStorage.removeItem("career-guide:token")
+    localStorage.removeItem("career-guide:assessment:guest")
+    localStorage.removeItem("career-guide:assessment-history:guest")
+    localStorage.removeItem("career-guide:saved-roadmaps")
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("career-guide:roadmap:guest") || key.startsWith("career-guide:roadmap:u:guest")) {
+        localStorage.removeItem(key)
+      }
+    }
+    sessionStorage.clear()
+    window.dispatchEvent(new Event("career-guide:logout"))
     setUser(null); setToken(null); setChecking(false)
   }, [])
 

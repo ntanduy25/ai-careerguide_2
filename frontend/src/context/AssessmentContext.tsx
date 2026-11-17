@@ -51,30 +51,11 @@ function ScopedAssessmentProvider({ children }: { children: ReactNode }) {
   const assessmentStorageKey = `career-guide:assessment:${userKey}`
   const historyStorageKey = `career-guide:assessment-history:${userKey}`
 
-  const [history, setHistory] = useState<AssessmentHistoryItem[]>(() => {
-    const stored = readStorage<AssessmentHistoryItem[]>(historyStorageKey, [])
-    if (stored && stored.length > 0) return stored
-    if (userKey !== "guest") {
-      const guestHistory = readStorage<AssessmentHistoryItem[]>("career-guide:assessment-history:guest", [])
-      if (guestHistory && guestHistory.length > 0) {
-        writeStorage(historyStorageKey, guestHistory)
-        return guestHistory
-      }
-    }
-    return []
-  })
+  const [history, setHistory] = useState<AssessmentHistoryItem[]>(() =>
+    readStorage<AssessmentHistoryItem[]>(historyStorageKey, []),
+  )
   const [assessment, setAssessment] = useState<AssessmentState>(() => {
     const stored = readStorage<AssessmentState | null>(assessmentStorageKey, null)
-    if (stored && (stored.completed || Object.keys(stored.answers || {}).length > 0 || (stored.scores || []).length > 0)) {
-      return stored
-    }
-    if (userKey !== "guest") {
-      const guestStored = readStorage<AssessmentState | null>("career-guide:assessment:guest", null)
-      if (guestStored && (guestStored.completed || Object.keys(guestStored.answers || {}).length > 0 || (guestStored.scores || []).length > 0)) {
-        writeStorage(assessmentStorageKey, guestStored)
-        return guestStored
-      }
-    }
     return stored ?? initial
   })
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null)
@@ -84,9 +65,20 @@ function ScopedAssessmentProvider({ children }: { children: ReactNode }) {
       if (event.key === assessmentStorageKey) { setAssessment(readStorage<AssessmentState>(assessmentStorageKey, initial)); setActiveHistoryId(null) }
       if (event.key === historyStorageKey) setHistory(readStorage<AssessmentHistoryItem[]>(historyStorageKey, []))
     }
+    const handleLogout = () => {
+      if (userKey === "guest") {
+        setAssessment(initial)
+        setHistory([])
+        setActiveHistoryId(null)
+      }
+    }
     window.addEventListener("storage", sync)
-    return () => window.removeEventListener("storage", sync)
-  }, [assessmentStorageKey, historyStorageKey])
+    window.addEventListener("career-guide:logout", handleLogout)
+    return () => {
+      window.removeEventListener("storage", sync)
+      window.removeEventListener("career-guide:logout", handleLogout)
+    }
+  }, [assessmentStorageKey, historyStorageKey, userKey])
 
   const update = useCallback(
     (changes: Partial<AssessmentState>) => {
