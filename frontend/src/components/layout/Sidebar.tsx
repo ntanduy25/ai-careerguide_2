@@ -29,6 +29,7 @@ interface SidebarProps {
   onMobileClose: () => void
   onMobileOpen: () => void
   onOpenChat: () => void
+  onOpenSearch?: () => void
 }
 
 const mainLinks = [
@@ -83,12 +84,14 @@ function SidebarBody({
   onToggle,
   onNavigate,
   onOpenChat,
+  onOpenSearch,
   mobile,
 }: {
   collapsed: boolean
   onToggle: () => void
   onNavigate?: () => void
   onOpenChat: () => void
+  onOpenSearch?: () => void
   mobile?: boolean
 }) {
   const { user, logout } = useAuth()
@@ -110,7 +113,11 @@ function SidebarBody({
 
   const handleQuickSearch = () => {
     onNavigate?.()
-    navigate("/dashboard?search=1")
+    if (onOpenSearch) {
+      onOpenSearch()
+    } else {
+      navigate("/dashboard")
+    }
   }
 
   return (
@@ -139,17 +146,20 @@ function SidebarBody({
           </SidebarLabel>
         </Link>
 
-        {!collapsed && (
-          <button
-            type="button"
-            onClick={handleQuickSearch}
-            className="sidebar-icon-button"
-            title="Tra cứu danh mục ngành"
-            aria-label="Tìm kiếm nhanh"
-          >
-            <Search size={17} />
-          </button>
-        )}
+        {/* Nút tìm kiếm nhanh - mở Modal tra cứu toàn cục */}
+        <button
+          type="button"
+          onClick={handleQuickSearch}
+          className={
+            collapsed
+              ? "grid size-10 shrink-0 place-items-center rounded-xl bg-white text-slate-600 transition hover:bg-sky-50 hover:text-sky-700 shadow-xs border border-slate-100"
+              : "sidebar-icon-button"
+          }
+          title="Tra cứu nhanh ngành học (Ctrl+K)"
+          aria-label="Tìm kiếm nhanh ngành học"
+        >
+          <Search size={17} />
+        </button>
 
         <button
           type="button"
@@ -463,6 +473,7 @@ export function Sidebar({
   onMobileClose,
   onMobileOpen,
   onOpenChat,
+  onOpenSearch,
 }: SidebarProps) {
   return (
     <>
@@ -483,14 +494,25 @@ export function Sidebar({
             AI Career<span className="text-sky-600">Guide</span>
           </span>
         </Link>
-        <button
-          type="button"
-          onClick={onOpenChat}
-          className="sidebar-icon-button"
-          aria-label="Mở cố vấn AI"
-        >
-          <Sparkles size={18} className="text-sky-600" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            className="sidebar-icon-button"
+            title="Tìm kiếm ngành học"
+            aria-label="Tìm kiếm ngành học"
+          >
+            <Search size={18} className="text-slate-600" />
+          </button>
+          <button
+            type="button"
+            onClick={onOpenChat}
+            className="sidebar-icon-button"
+            aria-label="Mở cố vấn AI"
+          >
+            <Sparkles size={18} className="text-sky-600" />
+          </button>
+        </div>
       </header>
 
       <motion.aside
@@ -503,6 +525,7 @@ export function Sidebar({
           collapsed={collapsed}
           onToggle={onToggle}
           onOpenChat={onOpenChat}
+          onOpenSearch={onOpenSearch}
         />
       </motion.aside>
 
@@ -534,6 +557,10 @@ export function Sidebar({
                 onOpenChat={() => {
                   onMobileClose()
                   onOpenChat()
+                }}
+                onOpenSearch={() => {
+                  onMobileClose()
+                  onOpenSearch?.()
                 }}
               />
             </motion.aside>

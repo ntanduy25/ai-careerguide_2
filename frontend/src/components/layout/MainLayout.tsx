@@ -5,15 +5,28 @@ import { Outlet, ScrollRestoration, useLocation } from "react-router"
 const AIChatAdvisor = lazy(() => import("../../pages/AIChatAdvisor").then(module => ({ default: module.AIChatAdvisor })))
 import { Footer } from "./Footer"
 import { Sidebar } from "./Sidebar"
+import { QuickSearchModal } from "../search/QuickSearchModal"
 
 export function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [desktop, setDesktop] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 1024 : true,
   )
   const location = useLocation()
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        setSearchOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [])
 
   useEffect(() => {
     const query = window.matchMedia("(min-width: 1024px)")
@@ -35,7 +48,10 @@ export function MainLayout() {
         onMobileClose={() => setMobileOpen(false)}
         onMobileOpen={() => setMobileOpen(true)}
         onOpenChat={() => setChatOpen(true)}
+        onOpenSearch={() => setSearchOpen(true)}
       />
+
+      <QuickSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
 
       <motion.div
         initial={false}
