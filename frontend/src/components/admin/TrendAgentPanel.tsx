@@ -182,17 +182,21 @@ export function TrendAgentPanel({ onNotify }: TrendAgentPanelProps) {
     operation.current = true
     setRunning(true)
     try {
-      const res = await apiFetch("/api/v1/taxonomy/trend-agent/run", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAdminAuthHeader(),
+      const res = await apiFetch(
+        "/api/v1/taxonomy/trend-agent/run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAdminAuthHeader(),
+          },
+          body: JSON.stringify({
+            focus_query: focusQuery.trim() || DEFAULT_TREND_QUERY_2026,
+            auto_save: false,
+          }),
         },
-        body: JSON.stringify({
-          focus_query: focusQuery.trim() || DEFAULT_TREND_QUERY_2026,
-          auto_save: false,
-        }),
-      })
+        120000,
+      )
       if (res.status === 401 || res.status === 403) {
         onNotify(
           "Cần đăng nhập lại bằng tài khoản Admin (JWT hợp lệ) để chạy Agent tìm kiếm.",
@@ -202,7 +206,15 @@ export function TrendAgentPanel({ onNotify }: TrendAgentPanelProps) {
       }
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
-        throw new Error(errData?.detail || `Lỗi HTTP ${res.status}`)
+        const detailMsg =
+          typeof errData?.detail === "string"
+            ? errData.detail
+            : typeof errData?.detail?.message === "string"
+              ? errData.detail.message
+              : Array.isArray(errData?.detail)
+                ? errData.detail.map((e: any) => e.msg || JSON.stringify(e)).join("; ")
+                : (errData?.detail ? JSON.stringify(errData.detail) : `Lỗi HTTP ${res.status}`)
+        throw new Error(detailMsg)
       }
       const data: TrendAgentStatusPayload = await res.json()
       if (!mounted.current) return
@@ -218,10 +230,13 @@ export function TrendAgentPanel({ onNotify }: TrendAgentPanelProps) {
           `Đã tạo bản nháp ${data.total_trending_marked ?? 0} ngành xu hướng phủ ${data.categories_covered ?? 0}/${data.total_categories ?? 23} nhóm ngành. Hãy rà soát và bấm "Lưu vào CSDL".`,
       )
     } catch (err) {
-      onNotify(
-        err instanceof Error ? err.message : "Không thể chạy Agent tìm xu hướng.",
-        true,
-      )
+      const msg =
+        err instanceof Error
+          ? err.name === "AbortError" || err.message?.toLowerCase().includes("abort")
+            ? "Quá thời gian chờ phản hồi tìm kiếm xu hướng. Vui lòng thử lại sau giây lát."
+            : err.message
+          : "Không thể chạy Agent tìm xu hướng."
+      onNotify(msg, true)
     } finally {
       operation.current = false
       if (mounted.current) setRunning(false)
@@ -238,27 +253,31 @@ export function TrendAgentPanel({ onNotify }: TrendAgentPanelProps) {
     operation.current = true
     setSavingToDb(true)
     try {
-      const res = await apiFetch("/api/v1/taxonomy/trend-agent/save", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAdminAuthHeader(),
+      const res = await apiFetch(
+        "/api/v1/taxonomy/trend-agent/save",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAdminAuthHeader(),
+          },
+          body: JSON.stringify({
+            focus_query: statusData?.focus_query || focusQuery.trim(),
+            articles_scanned: statusData?.articles_scanned || 0,
+            search_sources: statusData?.search_sources || [],
+            majors: list.map((m) => ({
+              major_code: m.major_code,
+              major_name: m.major_name,
+              category: m.category,
+              trend_tier: m.trend_tier,
+              trend_score: m.trend_score,
+              trend_reason: m.trend_reason,
+              trend_sources: m.trend_sources || [],
+            })),
+          }),
         },
-        body: JSON.stringify({
-          focus_query: statusData?.focus_query || focusQuery.trim(),
-          articles_scanned: statusData?.articles_scanned || 0,
-          search_sources: statusData?.search_sources || [],
-          majors: list.map((m) => ({
-            major_code: m.major_code,
-            major_name: m.major_name,
-            category: m.category,
-            trend_tier: m.trend_tier,
-            trend_score: m.trend_score,
-            trend_reason: m.trend_reason,
-            trend_sources: m.trend_sources || [],
-          })),
-        }),
-      })
+        60000,
+      )
       if (res.status === 401 || res.status === 403) {
         onNotify(
           "Cần đăng nhập lại bằng tài khoản Admin (JWT hợp lệ) để lưu dữ liệu vào CSDL.",
@@ -268,7 +287,15 @@ export function TrendAgentPanel({ onNotify }: TrendAgentPanelProps) {
       }
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
-        throw new Error(errData?.detail || `Lỗi HTTP ${res.status}`)
+        const detailMsg =
+          typeof errData?.detail === "string"
+            ? errData.detail
+            : typeof errData?.detail?.message === "string"
+              ? errData.detail.message
+              : Array.isArray(errData?.detail)
+                ? errData.detail.map((e: any) => e.msg || JSON.stringify(e)).join("; ")
+                : (errData?.detail ? JSON.stringify(errData.detail) : `Lỗi HTTP ${res.status}`)
+        throw new Error(detailMsg)
       }
       const saved: TrendAgentStatusPayload = await res.json()
       if (!mounted.current) return
@@ -283,10 +310,13 @@ export function TrendAgentPanel({ onNotify }: TrendAgentPanelProps) {
           `Đã lưu ${saved.total_trending_marked ?? list.length} ngành xu hướng vào CSDL cho hệ thống Đề xuất ngành.`,
       )
     } catch (err) {
-      onNotify(
-        err instanceof Error ? err.message : "Không thể lưu danh sách xu hướng vào CSDL.",
-        true,
-      )
+      const msg =
+        err instanceof Error
+          ? err.name === "AbortError" || err.message?.toLowerCase().includes("abort")
+            ? "Quá thời gian lưu vào CSDL. Vui lòng thử lại."
+            : err.message
+          : "Không thể lưu danh sách xu hướng vào CSDL."
+      onNotify(msg, true)
     } finally {
       operation.current = false
       if (mounted.current) setSavingToDb(false)
