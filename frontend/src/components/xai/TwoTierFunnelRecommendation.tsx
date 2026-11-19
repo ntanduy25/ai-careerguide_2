@@ -21,26 +21,19 @@ interface TwoTierFunnelProps {
   isLoading?: boolean
   activeGradeLevel?: string
   activeGender?: string
-  horizonLabel?: string
   weightsApplied?: {
     w_riasec?: number
     w_academic?: number
     w_preference?: number
   }
-  onUpdateProfileContext?: (gradeLevel: string, gender: string) => void
 }
-
-const GRADE_OPTIONS = ["Lớp 10", "Lớp 11", "Lớp 12", "Đã tốt nghiệp cấp 3"]
-const GENDER_OPTIONS = ["Nam", "Nữ", "Khác"]
 
 export function TwoTierFunnelRecommendation({
   funnelData,
   isLoading = false,
-  activeGradeLevel = "Lớp 12",
-  activeGender = "Nam",
-  horizonLabel,
+  activeGradeLevel,
+  activeGender,
   weightsApplied,
-  onUpdateProfileContext,
 }: TwoTierFunnelProps) {
   const fields = funnelData.tier1_fields || []
   const [selectedFieldIndex, setSelectedFieldIndex] = useState<number | "ALL">(
@@ -121,128 +114,53 @@ export function TwoTierFunnelRecommendation({
       ? fields
       : [fields[selectedFieldIndex] || fields[0]].filter(Boolean)
 
-  const resolvedHorizonLabel =
-    horizonLabel ||
-    funnelData.horizon_label ||
-    (activeGradeLevel.includes("10")
-      ? "Giai đoạn Định hướng Sớm & Tích lũy (Lớp 10)"
-      : activeGradeLevel.includes("11")
-        ? "Giai đoạn Tăng tốc & Thu hẹp Trọng tâm (Lớp 11)"
-        : activeGradeLevel.toLowerCase().includes("tốt nghiệp")
-          ? "Thí sinh Tự do & Hướng nghiệp Thực tế"
-          : "Giai đoạn Nước rút Thực chiến (Lớp 12)")
-
-  const wRiasecPct =
-    weightsApplied?.w_riasec != null
-      ? Math.round(weightsApplied.w_riasec * 100)
-      : activeGradeLevel.includes("10")
-        ? 50
-        : activeGradeLevel.includes("11")
-          ? 47
-          : 43
-  const wAcadPct =
-    weightsApplied?.w_academic != null
-      ? Math.round(weightsApplied.w_academic * 100)
-      : activeGradeLevel.includes("10")
-        ? 25
-        : activeGradeLevel.includes("11")
-          ? 32
-          : 40
-  const wPrefPct =
-    weightsApplied?.w_preference != null
-      ? Math.round(weightsApplied.w_preference * 100)
-      : Math.max(0, 100 - wRiasecPct - wAcadPct)
+  const grade = activeGradeLevel?.trim() || ""
+  const gender = activeGender?.trim() || ""
+  const stage = grade.includes("10")
+    ? { label: "Định hướng sớm & tích lũy — Lớp 10", reason: "khám phá nhiều hướng ngành, tìm hiểu sở thích và xây nền tảng môn học; bạn còn thời gian trải nghiệm trước khi chốt lựa chọn tuyển sinh" }
+    : grade.includes("11")
+      ? { label: "Thu hẹp trọng tâm — Lớp 11", reason: "thu hẹp nhóm ngành theo sở thích và các môn học thế mạnh, đồng thời bổ sung kiến thức cho những hướng bạn muốn theo đuổi" }
+      : grade.includes("12")
+        ? { label: "Ưu tiên đối chiếu tuyển sinh — Lớp 12", reason: "đối chiếu học lực hiện tại với tổ hợp môn và điều kiện tuyển sinh tham chiếu, giúp phân biệt lựa chọn vừa sức và lựa chọn cần cải thiện" }
+        : /tốt nghiệp|tot nghiep/i.test(grade)
+          ? { label: "Hướng học tập & nghề nghiệp thực tế", reason: "đối chiếu học lực hiện có với các chương trình đào tạo và hướng ứng dụng, thực hành phù hợp mục tiêu nghề nghiệp" }
+          : null
+  const profileIntroduction = stage
+    ? `Vì bạn ${/tốt nghiệp|tot nghiep/i.test(grade) ? "đã tốt nghiệp THPT" : `đang học ${grade.toLocaleLowerCase("vi-VN")}`}${gender ? ` và hồ sơ ghi nhận giới tính ${gender.toLocaleLowerCase("vi-VN")}` : ""}, hệ thống ưu tiên đề xuất để ${stage.reason}.`
+    : `Hồ sơ chưa có khối lớp${gender ? ` (giới tính đã ghi nhận: ${gender})` : " và giới tính"}. Bạn hãy cập nhật hồ sơ cá nhân để hệ thống giải thích đề xuất theo đúng thông tin của bạn.`
+  const genderExplanation = gender === "Nam"
+    ? "Với thông tin giới tính nam, hệ thống có thể bổ sung gợi ý khám phá Giáo dục/Y tế khi phù hợp sở thích của bạn."
+    : gender === "Nữ"
+      ? "Với thông tin giới tính nữ, hệ thống có thể mở rộng gợi ý STEM/Công nghệ khi phù hợp sở thích hoặc học lực của bạn."
+      : gender
+        ? "Thông tin giới tính được dùng để bổ sung góc nhìn về cơ hội khám phá và môi trường học tập đa dạng."
+        : stage ? "Hồ sơ chưa có giới tính; bạn có thể bổ sung trong hồ sơ cá nhân. Hệ thống chưa áp dụng gợi ý mở rộng theo giới tính." : ""
+  const hasAppliedWeights = stage && [weightsApplied?.w_riasec, weightsApplied?.w_academic, weightsApplied?.w_preference]
+    .every(value => typeof value === "number" && Number.isFinite(value))
+  const percent = (value: number | undefined) => ((value || 0) * 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })
 
   return (
     <div className="space-y-6">
-      {/* HA-GAE v3.1: Grade-Level Horizon & Gender Personalization Banner */}
-      <div className="rounded-3xl border border-sky-200/80 bg-white/80 p-4 shadow-xs backdrop-blur-xl sm:p-5">
-        <div className="flex flex-col justify-between gap-3.5 xl:flex-row xl:items-center">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100/90 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-sky-800">
-                <Sparkles size={12} className="text-sky-600" />
-                Đề xuất theo Khối lớp & Giới tính
-              </span>
-              <span className="text-xs font-bold text-slate-800">
-                {resolvedHorizonLabel}
-              </span>
-            </div>
-            <p className="text-xs text-slate-600">
-              Trọng số thích ứng:{" "}
-              <strong className="font-semibold text-sky-700">
-                {wRiasecPct}% Sở thích
-              </strong>{" "}
-              ·{" "}
-              <strong className="font-semibold text-sky-700">
-                {wAcadPct}% Học lực
-              </strong>{" "}
-              ·{" "}
-              <strong className="font-semibold text-cyan-700">
-                {wPrefPct}% Tự khai
-              </strong>{" "}
-              <span className="text-slate-400">|</span> Giới tính:{" "}
-              <strong className="font-semibold text-slate-800">
-                {activeGender}
-              </strong>{" "}
-              {activeGender === "Nữ"
-                ? "(Khuyến khích Nữ sinh STEM & điều kiện công thái học)"
-                : activeGender === "Nam"
-                  ? "(Mở rộng Kỹ thuật mũi nhọn & khuyến khích Giáo dục/Y tế)"
-                  : "(Môi trường đa dạng & bình đẳng cơ hội)"}
-            </p>
+      <section aria-label="Giải thích đề xuất theo hồ sơ" data-testid="profile-recommendation-context" className="rounded-3xl border border-sky-200/80 bg-white/80 p-4 shadow-xs backdrop-blur-xl sm:p-5">
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100/90 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-sky-800">
+              <Sparkles size={12} className="text-sky-600" />
+              Đề xuất theo hồ sơ của bạn
+            </span>
+            {stage && <span className="text-xs font-bold text-slate-800">{stage.label}</span>}
           </div>
-
-          {onUpdateProfileContext && (
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200/90 bg-slate-50/90 p-1">
-                {GRADE_OPTIONS.map((gOpt) => {
-                  const isSelected = activeGradeLevel === gOpt
-                  const shortLabel = gOpt.includes("Đã tốt nghiệp")
-                    ? "Đã tốt nghiệp"
-                    : gOpt
-                  return (
-                    <button
-                      key={gOpt}
-                      type="button"
-                      onClick={() => onUpdateProfileContext(gOpt, activeGender)}
-                      className={`rounded-xl px-2.5 py-1 text-xs font-bold transition ${
-                        isSelected
-                          ? "bg-sky-600 text-white shadow-2xs"
-                          : "text-slate-600 hover:bg-white hover:text-sky-700"
-                      }`}
-                    >
-                      {shortLabel}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200/90 bg-slate-50/90 p-1">
-                {GENDER_OPTIONS.map((genOpt) => {
-                  const isSelected = activeGender === genOpt
-                  return (
-                    <button
-                      key={genOpt}
-                      type="button"
-                      onClick={() =>
-                        onUpdateProfileContext(activeGradeLevel, genOpt)
-                      }
-                      className={`rounded-xl px-2.5 py-1 text-xs font-bold transition ${
-                        isSelected
-                          ? "bg-sky-600 text-white shadow-2xs"
-                          : "text-slate-600 hover:bg-white hover:text-sky-700"
-                      }`}
-                    >
-                      {genOpt}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+          <p className="text-sm leading-relaxed text-slate-700">{profileIntroduction}</p>
+          {genderExplanation && <p className="text-xs leading-relaxed text-slate-600">{genderExplanation} Giới tính không giới hạn ngành học hay quyết định năng lực của bạn.</p>}
+          {hasAppliedWeights && (
+            <p className="text-xs text-slate-600">
+              Trọng số đang áp dụng: <strong className="font-semibold text-sky-700">{percent(weightsApplied?.w_riasec)}% Sở thích</strong>
+              {" · "}<strong className="font-semibold text-sky-700">{percent(weightsApplied?.w_academic)}% Học lực</strong>
+              {" · "}<strong className="font-semibold text-cyan-700">{percent(weightsApplied?.w_preference)}% Tự khai</strong>
+            </p>
           )}
         </div>
-      </div>
+      </section>
 
       <p className="text-xs leading-relaxed text-slate-500">Điểm gợi ý được tính theo quy tắc tham khảo, không phải xác suất trúng tuyển. Dấu — là chưa đủ dữ liệu; phong cách tự khai không đo mức thành thạo kỹ năng.</p>
       {/* TIER 1 SELECTOR: Top 3 Fields */}
@@ -263,7 +181,7 @@ export function TwoTierFunnelRecommendation({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
           {fields.map((field, idx) => {
             const isPrimary = selectedFieldIndex === idx
 
@@ -272,15 +190,15 @@ export function TwoTierFunnelRecommendation({
                 key={field.field_name}
                 type="button"
                 onClick={() => setSelectedFieldIndex(idx)}
-                className={`relative flex flex-col justify-between rounded-2xl border p-4 text-left transition-all duration-200 sm:rounded-3xl ${
+                className={`relative flex min-w-0 flex-col justify-between rounded-2xl border p-4 text-left transition-all duration-200 sm:rounded-3xl ${
                   isPrimary
                     ? "border-sky-500/80 bg-white shadow-md shadow-sky-600/10 ring-2 ring-sky-500/20"
                     : "border-slate-200/85 bg-white/75 hover:border-sky-300 hover:bg-white"
                 }`}
               >
                 <div className="mb-2.5 flex items-center justify-between gap-2">
-                  <span className="text-2xl">{field.icon || "🎓"}</span>
-                  <span className="text-2xl font-black tabular-nums text-sky-600">
+                  <span className="shrink-0 text-xl sm:text-2xl">{field.icon || "🎓"}</span>
+                  <span className="whitespace-nowrap text-xl font-black tabular-nums text-sky-600 sm:text-2xl">
                     {field.match == null ? "—" : `${field.match}/100`}
                   </span>
                 </div>
@@ -336,98 +254,98 @@ export function TwoTierFunnelRecommendation({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.22, delay: mIdx * 0.03 }}
                   >
-                    <Card className="group overflow-hidden rounded-2xl p-5 sm:rounded-3xl sm:p-6">
-                      <div className="flex items-start gap-4">
-                        {/* Rank Badge */}
-                        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-sky-600 text-sm font-bold text-white shadow-xs">
-                          #{globalRank}
-                        </span>
+                    <Card className="group overflow-hidden rounded-2xl p-4 sm:rounded-3xl sm:p-5 xl:p-6">
+                      <div className="flex flex-col gap-3">
+                        {/* Header: Rank + Title + Score */}
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-sky-600 text-xs font-bold text-white shadow-xs sm:size-11 sm:rounded-2xl sm:text-sm">
+                            #{globalRank}
+                          </span>
 
-                        <div className="min-w-0 flex-1">
-                          {/* Header: Title + Match % */}
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <h4 className="text-base font-bold text-slate-900 transition-colors group-hover:text-sky-700 sm:text-xl">
-                                {major.name}
-                              </h4>
-                              {/* Primary Essential Badges */}
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <FeasibilityBadge
-                                  readiness={major.readiness}
-                                  value={major.feasibility}
-                                  label={major.feasibility_label}
-                                />
-                                {major.best_matching_block &&
-                                  major.best_block_score != null && (
-                                    <span className="inline-flex items-center gap-1 rounded-full border border-sky-200/90 bg-sky-50/90 px-2.5 py-1 text-xs font-semibold text-sky-800">
-                                      <GraduationCap
-                                        size={13}
-                                        className="text-sky-600"
-                                      />
-                                      {formatBlockWithSubjects(
-                                        major.best_matching_block,
-                                        {
-                                          short: true,
-                                          includePrefix: false,
-                                        },
-                                      )}
-                                      : {major.best_block_score}đ
-                                      {major.benchmark_cutoff
-                                        ? ` (Chuẩn ~${major.benchmark_cutoff}đ)`
-                                        : ""}
-                                    </span>
-                                  )}
-                                {major.admission_tactic &&
-                                  major.admission_tactic !==
-                                    "Đối chiếu phương thức tuyển sinh" && (
-                                    <span
-                                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                        major.admission_tactic.includes("NV1-2")
-                                          ? "border border-amber-200 bg-amber-50 text-amber-800"
-                                          : major.admission_tactic.includes(
-                                                "NV6+",
-                                              )
-                                            ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
-                                            : "border border-sky-200 bg-sky-50/80 text-sky-800"
-                                      }`}
-                                    >
-                                      <Target size={12} />
-                                      {major.admission_tactic}
-                                    </span>
-                                  )}
-                                {major.nudge_badge && (
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50/90 px-2.5 py-1 text-xs font-semibold text-cyan-800">
-                                    <Sparkles
-                                      size={12}
-                                      className="text-cyan-600"
-                                    />
-                                    {major.nudge_badge}
-                                  </span>
-                                )}
-                                <TrendBadge
-                                  tier={major.trend_tier}
-                                  isTrending={major.is_trending}
-                                  reason={major.trend_reason}
-                                />
-                                <span className="rounded-full border border-slate-200/90 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                                  Mã {major.code}
-                                </span>
-                              </div>
-                            </div>
+                          <div className="flex min-w-0 flex-1 items-start justify-between gap-2.5 sm:gap-3">
+                            <h4 className="min-w-0 flex-1 break-words text-base font-bold leading-snug text-slate-900 transition-colors group-hover:text-sky-700 sm:text-lg xl:text-xl">
+                              {major.name}
+                            </h4>
 
-                            <div className="text-right shrink-0">
-                              <span className="block text-3xl font-black tabular-nums text-sky-600 sm:text-4xl">
+                            <div className="shrink-0 text-right">
+                              <span className="block whitespace-nowrap text-2xl font-black tabular-nums text-sky-600 sm:text-3xl xl:text-4xl">
                                 {major.match == null ? "—" : `${major.match}/100`}
                               </span>
-                              <span className="block text-[11px] font-semibold text-slate-400">
+                              <span className="block text-[10px] font-semibold text-slate-400 sm:text-[11px]">
                                 Điểm gợi ý
                               </span>
                             </div>
                           </div>
+                        </div>
+
+                        <div className="min-w-0 sm:pl-[3.75rem]">
+                          {/* Primary Essential Badges */}
+                          <div className="flex max-w-full flex-wrap items-center gap-1.5 sm:gap-2">
+                            <FeasibilityBadge
+                              readiness={major.readiness}
+                              value={major.feasibility}
+                              label={major.feasibility_label}
+                            />
+                            {major.best_matching_block &&
+                              major.best_block_score != null && (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200/90 bg-sky-50/90 px-2.5 py-1 text-xs font-semibold text-sky-800">
+                                  <GraduationCap
+                                    size={13}
+                                    className="text-sky-600"
+                                  />
+                                  {formatBlockWithSubjects(
+                                    major.best_matching_block,
+                                    {
+                                      short: true,
+                                      includePrefix: false,
+                                    },
+                                  )}
+                                  : {major.best_block_score}đ
+                                  {major.benchmark_cutoff
+                                    ? ` (Chuẩn ~${major.benchmark_cutoff}đ)`
+                                    : ""}
+                                </span>
+                              )}
+                            {major.admission_tactic &&
+                              major.admission_tactic !==
+                                "Đối chiếu phương thức tuyển sinh" && (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                    major.admission_tactic.includes("NV1-2")
+                                      ? "border border-amber-200 bg-amber-50 text-amber-800"
+                                      : major.admission_tactic.includes(
+                                            "NV6+",
+                                          )
+                                        ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                                        : "border border-sky-200 bg-sky-50/80 text-sky-800"
+                                  }`}
+                                >
+                                  <Target size={12} />
+                                  {major.admission_tactic}
+                                </span>
+                              )}
+                            {major.nudge_badge && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50/90 px-2.5 py-1 text-xs font-semibold text-cyan-800">
+                                <Sparkles
+                                  size={12}
+                                  className="text-cyan-600"
+                                />
+                                {major.nudge_badge}
+                              </span>
+                            )}
+                            <TrendBadge
+                              tier={major.trend_tier}
+                              isTrending={major.is_trending}
+                              reason={major.trend_reason}
+                            />
+                            <span className="rounded-full border border-slate-200/90 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                              Mã {major.code}
+                            </span>
+                          </div>
 
                           {/* 3 Pillars Score Breakdown */}
                           {major.fit && (
-                            <div className="mt-4 grid grid-cols-3 gap-2.5 rounded-2xl border border-slate-200/80 bg-white/70 p-3.5 sm:gap-4 sm:p-4">
+                            <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3.5 sm:grid-cols-3 sm:gap-4 sm:p-4">
                               <div>
                                 <div className="mb-1.5 flex justify-between text-xs font-semibold text-slate-600">
                                   <span>Sở thích</span>

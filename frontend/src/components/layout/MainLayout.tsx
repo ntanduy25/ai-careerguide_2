@@ -57,12 +57,12 @@ export function MainLayout() {
         initial={false}
         animate={{ paddingLeft: desktop ? (collapsed ? 84 : 284) : 0 }}
         transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 flex min-h-screen flex-col pt-18 lg:pt-0"
+        className="relative z-10 flex min-h-screen min-w-0 flex-col overflow-x-clip pt-18 lg:pt-0"
       >
         <AnimatePresence mode="wait">
           <motion.main
             key={location.pathname}
-            className="flex-1"
+            className="min-w-0 flex-1 pb-20 lg:pb-0"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}

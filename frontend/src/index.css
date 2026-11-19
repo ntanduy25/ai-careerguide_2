@@ -275,6 +275,32 @@
 .advisor-markdown {
   font-size: 0.925rem;
   line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.advisor-markdown :not(pre) > code {
+  border-radius: 0.375rem;
+  background-color: #f1f5f9;
+  padding: 0.125rem 0.375rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.82em;
+  color: #0c4a6e;
+  word-break: break-word;
+}
+
+.advisor-markdown pre {
+  margin: 0;
+  white-space: pre;
+}
+
+.advisor-markdown pre code {
+  display: block;
+  background: transparent;
+  padding: 0;
+  color: #f1f5f9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
 }
 
 .advisor-markdown h2 {

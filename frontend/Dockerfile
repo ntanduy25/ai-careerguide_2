@@ -7,6 +7,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
+ENV NODE_OPTIONS="--max-old-space-size=1024" \
+    RAYON_NUM_THREADS=2
 RUN npm run build
 
 # Stage 2: Production Nginx Reverse Proxy + Static Asset Server

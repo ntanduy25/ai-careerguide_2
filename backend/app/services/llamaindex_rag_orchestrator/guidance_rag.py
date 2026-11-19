@@ -390,6 +390,9 @@ async def chat_with_career_counselor(db, payload: AIChatRequest, current_user_id
         guidance_facts, render_chat, forbidden_request, resolve_profile_owner, REDIRECT,
     )
     from app.services.llamaindex_rag_orchestrator.counselor_connection import verify_receipt
+    from app.services.llamaindex_rag_orchestrator.chat_scope import (
+        classify_chat_message, local_scope_reply, is_academic_question,
+    )
     from app.services.ai_config.service import resolve_snapshot
     from app.services.ai_config import adapter
 
@@ -398,9 +401,10 @@ async def chat_with_career_counselor(db, payload: AIChatRequest, current_user_id
         raise HTTPException(401, "Đăng nhập để xem bản đánh giá đã lưu.")
 
     connected = await verify_receipt(db, payload.connection_revision)
-    if forbidden_request(payload.message):
+    scope = "redirect" if forbidden_request(payload.message) else classify_chat_message(payload.message, payload.history)
+    if scope != "allow":
         return AIChatResponse(
-            reply=REDIRECT,
+            reply=REDIRECT if scope == "redirect" else local_scope_reply(scope),
             suggested_followups=["Tìm hiểu ngành An toàn thông tin", "Cần bổ sung gì vào hồ sơ hướng nghiệp?"],
             is_fallback=False,
             is_ai_generated=False,
@@ -409,17 +413,25 @@ async def chat_with_career_counselor(db, payload: AIChatRequest, current_user_id
             connection_revision=payload.connection_revision if connected else None,
         )
 
-    facts = await guidance_facts(db, payload, current_user_id)
-    static_reply, context, followups = render_chat(payload, facts)
+    academic = is_academic_question(payload.message, payload.history)
+    if academic:
+        # Tutoring does not require a catalog match or a private student profile.
+        static_reply = "Đây là câu hỏi học tập phù hợp. Hiện chưa nhận được lời giải từ AI; bạn có thể kiểm tra kết nối rồi gửi lại câu hỏi."
+        context = payload.major_code
+        followups = ["Cho mình một ví dụ dễ hiểu", "Giải thích từng bước"]
+    else:
+        facts = await guidance_facts(db, payload, current_user_id)
+        static_reply, context, followups = render_chat(payload, facts)
     connected = await verify_receipt(db, payload.connection_revision)
 
-    if connected:
+    generation_failed = False
+    if connected and static_reply != REDIRECT:
         try:
             snapshot = await resolve_snapshot(db)
             system_instruction = (
                 "Bạn là Cố vấn AI Hướng nghiệp thông minh, thân thiện và tận tâm của hệ thống AI CareerGuide.\n"
                 "Nhiệm vụ: Tư vấn, giải đáp câu hỏi của học sinh/sinh viên về định hướng nghề nghiệp, các ngành học, "
-                "mức độ phù hợp với sở thích/năng lực, và xây dựng lộ trình học tập.\n\n"
+                "mức độ phù hợp với sở thích/năng lực, học tập, và mục tiêu tương lai.\n\n"
                 "Quy tắc phản hồi:\n"
                 "1. Trả lời bằng tiếng Việt tự nhiên, nhiệt tình, súc tích, mạch lạc, giọng điệu khuyến khích và truyền cảm hứng.\n"
                 "2. Sử dụng thông tin từ [DỮ LIỆU THAM CHIẾU HỆ THỐNG] dưới đây làm căn cứ chuẩn xác "
@@ -430,15 +442,36 @@ async def chat_with_career_counselor(db, payload: AIChatRequest, current_user_id
                 "4. Định dạng Markdown rõ ràng (dùng gạch đầu dòng, in đậm tên ngành hoặc từ khóa quan trọng) để học sinh dễ đọc."
             )
 
-            grounding = f"[DỮ LIỆU THAM CHIẾU HỆ THỐNG]:\n{static_reply}"
-            messages = [{"role": "system", "content": f"{system_instruction}\n\n{grounding}"}]
+            if academic:
+                system_instruction = (
+                    "Bạn là trợ giảng học tập trong AI CareerGuide, hỗ trợ kiến thức phổ thông và lập trình.\n"
+                    "Trả lời trực tiếp câu hỏi hiện tại bằng tiếng Việt, rõ ràng, ngắn gọn và đúng trình độ câu hỏi.\n"
+                    "Với phép tính hoặc biểu thức ngắn, hãy giải hoặc tính kết quả; không bắt buộc người dùng phải nói từ 'học'.\n"
+                    "Với khái niệm, nêu định nghĩa dễ hiểu và một ví dụ. Với bài tập, trình bày các bước chính. "
+                    "Với lập trình, cung cấp mã đúng ngôn ngữ yêu cầu và giải thích ngắn; nếu thiếu dữ kiện, nêu giả định hoặc hỏi lại cụ thể.\n"
+                    "Không chuyển câu hỏi học tập sang tư vấn chọn ngành, không yêu cầu chọn ngành và không lặp lại "
+                    "các lần từ chối nhầm trước đó. Không suy ra năng lực hay mức phù hợp nghề từ một câu hỏi kiến thức.\n"
+                    "Không bịa dữ kiện thời sự, nguồn tài liệu hoặc thông tin chưa được cung cấp."
+                )
+            else:
+                system_instruction += f"\n\n[DỮ LIỆU THAM CHIẾU HỆ THỐNG]:\n{static_reply}"
+            messages = [{"role": "system", "content": system_instruction}]
 
             if payload.history:
+                related_history = []
+                last_user_allowed = False
                 for entry in payload.history[-6:]:
+                    if entry.role == "user":
+                        last_user_allowed = (not forbidden_request(entry.content) and
+                                             classify_chat_message(entry.content, related_history) == "allow" and
+                                             (not academic or is_academic_question(entry.content, related_history)))
+                    if not last_user_allowed:
+                        continue
                     if entry.content and entry.role in {"user", "assistant"}:
                         clean_content = sanitize_pii(entry.content)
                         if clean_content.strip():
                             messages.append({"role": entry.role, "content": clean_content[:1500]})
+                            related_history.append(entry)
 
             user_msg = sanitize_pii(payload.message).strip()
             messages.append({"role": "user", "content": user_msg})
@@ -464,14 +497,16 @@ async def chat_with_career_counselor(db, payload: AIChatRequest, current_user_id
                 )
         except Exception as exc:
             logger.warning("LLM synthesis failed in career chat, falling back to static guidance: %s", exc)
+            generation_failed = True
+            connected = False
 
     return AIChatResponse(
         reply=static_reply,
         suggested_followups=followups,
         context_major_code=context,
-        is_fallback=False,
+        is_fallback=generation_failed,
         is_ai_generated=False,
-        response_source="verified_guidance",
+        response_source="offline_guidance" if generation_failed else "verified_guidance",
         connection_available=connected,
         connection_revision=payload.connection_revision if connected else None,
     )

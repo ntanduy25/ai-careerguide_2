@@ -1,5 +1,9 @@
 """A real, bounded provider check; student evidence never enters the request."""
 import asyncio
+import base64
+import hashlib
+import hmac
+import re
 import secrets
 import time
 import weakref
@@ -18,12 +22,25 @@ class ProbeState:
     task: asyncio.Task | None = None
     result: dict | None = None
     cached_until: float = 0
-    # Receipts refer only to this server-owned immutable configuration revision.
-    receipts: dict[str, tuple[str, float]] = field(default_factory=dict)
     starts: deque = field(default_factory=deque)
 
 
 _STATES: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _receipt_signature(revision: str, nonce: str) -> str:
+    # Domain separation keeps this proof distinct from authentication tokens.
+    message = f"career-chat-connection-v1\0{revision}\0{nonce}".encode()
+    signature = hmac.new(settings.SECRET_KEY.encode(), message, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(signature).decode().rstrip("=")
+
+
+def _issue_receipt(revision: str) -> str:
+    # A receipt proves a successful probe for one immutable configuration, not
+    # continuing provider health or user authorization. No five-minute timer or
+    # worker-local session map is needed; a configuration change invalidates it.
+    nonce = secrets.token_urlsafe(16)
+    return nonce + _receipt_signature(revision, nonce)
 
 
 def _state() -> ProbeState:
@@ -63,7 +80,6 @@ async def check_connection(db) -> dict:
         return _result(False, exc.code)
     state = _state()
     now = time.monotonic()
-    state.receipts = {key: value for key, value in state.receipts.items() if value[1] > now}
     if state.revision == snapshot.revision_token and state.result and now < state.cached_until:
         return dict(state.result)
     if state.task and not state.task.done() and state.revision != snapshot.revision_token:
@@ -93,9 +109,7 @@ async def check_connection(db) -> dict:
     if state.task is task:
         if not state.result or state.result["checked_at"] != result["checked_at"]:
             if result["available"]:
-                token = secrets.token_urlsafe(32)
-                state.receipts[token] = (snapshot.revision_token, time.monotonic() + 300)
-                result["revision_token"] = token
+                result["revision_token"] = _issue_receipt(snapshot.revision_token)
             state.result = result
             state.cached_until = time.monotonic() + 2
         return dict(state.result)
@@ -103,15 +117,12 @@ async def check_connection(db) -> dict:
 
 
 async def verify_receipt(db, token: str | None) -> bool:
-    if not token:
-        return False
-    receipt = _state().receipts.get(token)
-    if not receipt or receipt[1] <= time.monotonic():
+    # Verification only reads the active configuration; it never probes the LLM.
+    if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{65}", token):
         return False
     try:
         current = await config_service.resolve_snapshot(db)
     except AIConfigError:
         return False
-    if current.revision_token != receipt[0]:
-        return False
-    return True
+    nonce, signature = token[:22], token[22:]
+    return hmac.compare_digest(signature, _receipt_signature(current.revision_token, nonce))

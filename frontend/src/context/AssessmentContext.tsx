@@ -5,15 +5,35 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
+import { requestJSON } from "../services/api"
 import { readStorage, writeStorage } from "../services/storage"
 import type {
+  AcademicScore,
   AssessmentHistoryItem,
   AssessmentState,
+  CareerAspirationInput,
 } from "../types/assessment"
 import { useAuth } from "./AuthContext"
+
+interface ServerAssessmentProfile {
+  assessment_id?: string | null
+  has_assessment?: boolean
+  riasec_answers?: Record<string, unknown>
+  cognitive_answers?: Record<string, unknown>
+  raw_grades?: Record<string, unknown>
+  aspiration?: {
+    dream_job?: string
+    desired_field?: string
+    work_values?: string[]
+    preferred_environment?: string
+    score_strategy?: string
+  } | null
+  last_updated?: string
+}
 
 const initial: AssessmentState = {
   step: 1,
@@ -27,6 +47,7 @@ interface AssessmentContextValue {
   assessment: AssessmentState
   history: AssessmentHistoryItem[]
   activeHistoryId: string | null
+  hydrating: boolean
   update: (changes: Partial<AssessmentState>) => void
   reset: () => void
   recordCompletedAttempt: (state: AssessmentState) => AssessmentHistoryItem
@@ -42,7 +63,7 @@ export function AssessmentProvider({ children }: { children: ReactNode }) {
 }
 
 function ScopedAssessmentProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const userKey = useMemo(
     () => (user?.email || user?.id || "guest").toLowerCase().trim(),
     [user?.email, user?.id],
@@ -59,6 +80,156 @@ function ScopedAssessmentProvider({ children }: { children: ReactNode }) {
     return stored ?? initial
   })
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null)
+  const [hydrating, setHydrating] = useState(false)
+  const hydratedRef = useRef(false)
+
+  useEffect(() => {
+    if (hydratedRef.current || !user || !token || user.role?.toLowerCase() === "admin") {
+      return
+    }
+    const stored = readStorage<AssessmentState | null>(assessmentStorageKey, null)
+    const hasCompletedLocal = Boolean(
+      stored?.completed &&
+        (Object.keys(stored.answers || {}).length >= 3 ||
+          (stored.scores || []).length >= 2),
+    )
+    if (hasCompletedLocal) {
+      hydratedRef.current = true
+      return
+    }
+
+    let active = true
+    const controller = new AbortController()
+    setHydrating(true)
+
+    requestJSON<ServerAssessmentProfile>("/assessment/profile", {
+      signal: controller.signal,
+    })
+      .then((profile) => {
+        if (!active || controller.signal.aborted) return
+        hydratedRef.current = true
+        if (!profile?.has_assessment) return
+
+        const answerCount = Object.keys(profile.riasec_answers || {}).length
+        const gradeCount = Object.keys(profile.raw_grades || {}).length
+        if (answerCount < 3 && gradeCount < 2) return
+
+        const answers: Record<string, number> = {}
+        Object.entries(profile.riasec_answers || {}).forEach(([k, v]) => {
+          const num = Number(v)
+          if (Number.isInteger(num) && num >= 1 && num <= 5) {
+            answers[k] = num
+          }
+        })
+
+        const cognitive: Record<string, string> = {}
+        Object.entries(profile.cognitive_answers || {}).forEach(([k, v]) => {
+          if (typeof v === "string" && v.trim()) {
+            cognitive[k] = v.trim()
+          }
+        })
+
+        const scores: AcademicScore[] = Object.entries(profile.raw_grades || {})
+          .map(([subject, score]) => ({
+            subject,
+            score: Number(score),
+            zScore: null,
+          }))
+          .filter(
+            (s) =>
+              s.subject &&
+              Number.isFinite(s.score) &&
+              s.score >= 0 &&
+              s.score <= 10,
+          )
+
+        const asp = profile.aspiration
+        const hasAsp = Boolean(
+          asp &&
+            (asp.dream_job ||
+              asp.desired_field ||
+              (Array.isArray(asp.work_values) && asp.work_values.length > 0) ||
+              asp.preferred_environment),
+        )
+        const aspiration: CareerAspirationInput | undefined =
+          hasAsp && asp
+            ? {
+                dreamJob: asp.dream_job || "",
+                desiredField: asp.desired_field || "",
+                workValues: Array.isArray(asp.work_values) ? asp.work_values : [],
+                preferredEnvironment: asp.preferred_environment || "",
+                scoreStrategy:
+                  asp.score_strategy === "REALISTIC_SAFE" ||
+                  asp.score_strategy === "CHALLENGE_TOP" ||
+                  asp.score_strategy === "FLEXIBLE_PATHWAY"
+                    ? asp.score_strategy
+                    : "FLEXIBLE_PATHWAY",
+              }
+            : undefined
+
+        const completedAt = profile.last_updated || new Date().toISOString()
+        const hydratedState: AssessmentState = {
+          step: 4,
+          answers,
+          cognitive,
+          scores,
+          aspiration,
+          completed: true,
+          completedAt,
+          syncStatus: "SYNCED",
+          submissionId: profile.assessment_id || undefined,
+        }
+
+        const existingHistory = readStorage<AssessmentHistoryItem[]>(
+          historyStorageKey,
+          [],
+        )
+        const dbHistoryId = `db-${profile.assessment_id || "latest"}`
+        const seededHistory =
+          existingHistory.length === 0 &&
+          !existingHistory.some((h) => h.id === dbHistoryId)
+        if (seededHistory) {
+          const summary = summarizeAssessmentAttempt(answers, cognitive, scores)
+          const historyItem: AssessmentHistoryItem = {
+            id: dbHistoryId,
+            createdAt: completedAt,
+            ...summary,
+            aspiration,
+          }
+          setHistory([historyItem])
+          writeStorage(historyStorageKey, [historyItem])
+        }
+
+        const hasInProgressDraft = Boolean(
+          stored &&
+            !stored.completed &&
+            (Object.keys(stored.answers || {}).length > 0 ||
+              (stored.scores || []).length > 0),
+        )
+        if (!hasInProgressDraft) {
+          setAssessment(hydratedState)
+          writeStorage(assessmentStorageKey, hydratedState)
+          if (seededHistory) {
+            setActiveHistoryId(dbHistoryId)
+          }
+        }
+      })
+      .catch(() => {
+        if (active && !controller.signal.aborted) {
+          hydratedRef.current = true
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setHydrating(false)
+        }
+      })
+
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [user?.id, user?.role, token, assessmentStorageKey, historyStorageKey])
 
   useEffect(() => {
     const sync = (event: StorageEvent) => {
@@ -179,6 +350,7 @@ function ScopedAssessmentProvider({ children }: { children: ReactNode }) {
       assessment,
       history,
       activeHistoryId,
+      hydrating,
       update,
       reset,
       recordCompletedAttempt,
@@ -189,6 +361,7 @@ function ScopedAssessmentProvider({ children }: { children: ReactNode }) {
       assessment,
       history,
       activeHistoryId,
+      hydrating,
       update,
       reset,
       recordCompletedAttempt,

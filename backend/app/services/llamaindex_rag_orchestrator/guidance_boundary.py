@@ -104,18 +104,9 @@ def forbidden_request(message: str) -> bool:
 
 
 def in_scope(message: str, codes: list[str], history=None) -> bool:
-    text = fold(message)
-    # A selected major alone must not turn unrelated requests into career requests.
-    terms = (
-        "nganh", "nghe", "hoc", "viec lam", "huong nghiep", "tuyen sinh", "diem", "holland",
-        "riasec", "tu duy", "ky nang", "so thich", "phu hop", "nguyen vong", "thu nhap", "hoc phi",
-        "gia dinh", "dia phuong", "suc khoe", "ke hoach", "lo trinh", "career", "major", "study",
-        "university", "school", "skill", "job", "scholarship", "chao", "xin chao", "hi", "hello",
-        "alo", "tu van", "giup", "hoi"
-    )
-    if codes or any(re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", text) for t in terms):
-        return True
-    return bool(history and re.fullmatch(r"\s*(con|va|tai sao|vi sao|cu the|them|nganh do|nghe do|no|why|more|how)(.{0,30})[?!. ]*", text))
+    from app.services.llamaindex_rag_orchestrator.chat_scope import classify_chat_message
+    decision = classify_chat_message(message, history)
+    return decision == "allow" or (decision == "clarify" and bool(codes))
 
 
 def personal_facts(code: str, facts: dict) -> dict:
@@ -158,10 +149,11 @@ def describe(code: str, facts: dict) -> str:
 
 
 def render_chat(payload, facts: dict) -> tuple[str, str | None, list[str]]:
+    from app.services.llamaindex_rag_orchestrator.chat_scope import classify_chat_message
     items = facts["items"]
     text = fold(payload.message)
     # A career word embedded in an unrelated task does not authorize that task.
-    if re.search(r"(viet|sang tac).{0,20}(bai tho|truyen cuoi)|cong thuc nau|du bao thoi tiet|ket qua xo so", text):
+    if classify_chat_message(payload.message, payload.history) == "redirect":
         return REDIRECT, None, ["Tìm hiểu nghề kỹ sư AI", "Đối chiếu hồ sơ chọn ngành"]
     direct = mentioned_codes(payload.message, items)
     intent_status, candidates, goals = career_intent(payload.message, items)

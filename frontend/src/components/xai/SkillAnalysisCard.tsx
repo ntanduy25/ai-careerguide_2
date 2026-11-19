@@ -52,7 +52,7 @@ export function SkillAnalysisCard({
   if (!loading && !data) return null
 
   return (
-    <div className="glass-card rounded-2xl p-5 sm:rounded-3xl sm:p-6">
+    <div className="glass-card min-w-0 overflow-hidden rounded-2xl p-4 sm:rounded-3xl sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
           <Sparkles size={16} className="text-sky-600" />
@@ -82,7 +82,7 @@ export function SkillAnalysisCard({
                 {data.strengths.map((item) => (
                   <li
                     key={item.title}
-                    className="rounded-xl border border-slate-200/80 bg-white/70 p-3"
+                    className="min-w-0 rounded-xl border border-slate-200/80 bg-white/70 p-3"
                   >
                     <span className="block text-sm font-bold text-slate-800">
                       {item.title}
@@ -105,7 +105,7 @@ export function SkillAnalysisCard({
                 {data.weaknesses.map((item) => (
                   <li
                     key={item.title}
-                    className="rounded-xl border border-slate-200/80 bg-white/70 p-3"
+                    className="min-w-0 rounded-xl border border-slate-200/80 bg-white/70 p-3"
                   >
                     <span className="block text-sm font-bold text-slate-800">
                       {item.title}

@@ -143,8 +143,17 @@ async def get_student_profile(db: AsyncSession, user_id: uuid.UUID) -> dict[str,
     snapshot = None
     if evidence["assessment_id"]:
         snapshot = await db.get(StudentAssessment, uuid.UUID(evidence["assessment_id"]))
+    raw_responses = snapshot.raw_responses if snapshot and isinstance(snapshot.raw_responses, dict) else {}
+    cognitive_answers = raw_responses.get("cognitive") if isinstance(raw_responses.get("cognitive"), dict) else {}
+    has_assessment = bool(
+        evidence["assessment_id"]
+        and (evidence["riasec_answers"] or evidence["riasec_scores"] or evidence["grades_by_subject"])
+    )
     return {"user_id": user_id, "assessment_id": evidence["assessment_id"],
-            "riasec_vector": evidence["riasec_scores"], "cognitive_preferences": evidence["cognitive_preferences"],
+            "has_assessment": has_assessment,
+            "riasec_vector": evidence["riasec_scores"], "riasec_answers": evidence["riasec_answers"],
+            "cognitive_preferences": evidence["cognitive_preferences"], "cognitive_answers": cognitive_answers,
+            "aspiration": evidence["aspiration"],
             "computed_block_zscores": _computed_blocks(evidence["grades_by_subject"], blocks),
             "raw_grades": evidence["grades_by_subject"], "score_context": evidence["score_context"],
             "diagnostic_skills_mastered": sorted(mastered),

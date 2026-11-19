@@ -10,7 +10,7 @@ import { TrendBadge } from "./TrendBadge"
 function MajorBriefTile({ major, current, verified = true }: { major: AspirationMajorBrief; current?: boolean; verified?: boolean }) {
   const readiness = verified ? major.readiness : undefined
   const status = readiness?.status ?? "UNKNOWN"
-  return <Link to={`/majors/${major.major_code}`} className="group block rounded-2xl border border-slate-200 bg-white/80 p-4 transition hover:border-sky-300 hover:shadow-md">
+  return <Link to={`/majors/${major.major_code}`} className="group block min-w-0 rounded-2xl border border-slate-200 bg-white/80 p-4 transition hover:border-sky-300 hover:shadow-md">
     <div className="flex flex-wrap items-center gap-2 text-xs">
       <span className="font-semibold text-sky-700">Mã {major.major_code}</span>
       <TrendBadge tier={major.trend_tier} isTrending={major.is_trending} />
@@ -65,7 +65,7 @@ export function AspirationAlignmentCard({ analysis, currentAspiration, onUpdateA
   const goalCodes = new Set(goals.map(m => m.major_code))
   const currentCodes = new Set(current.map(m => m.major_code))
   const exploration = (modern && !isAnalyzing ? analysis?.exploration_options ?? [] : []).filter(m => !goalCodes.has(m.major_code) && !currentCodes.has(m.major_code))
-  return <section className="glass-card rounded-2xl p-5 sm:p-6">
+  return <section className="glass-card min-w-0 overflow-hidden rounded-2xl p-4 sm:rounded-3xl sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><Compass className="size-5 text-sky-600" /> Nguyện vọng và học lực hiện tại</h2>
         <p className="mt-1 break-words text-sm text-slate-700">{currentAspiration?.dreamJob || analysis?.dream_job || "Chưa chọn nghề mong muốn"}</p></div>

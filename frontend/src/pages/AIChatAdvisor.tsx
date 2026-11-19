@@ -55,10 +55,6 @@ type ConnectionState =
 
 const CHAT_TIMEOUT_MS = 330_000
 const CONNECTION_TIMEOUT_MS = 90_000
-const MAX_HISTORY_MESSAGES = 64
-const MAX_HISTORY_MESSAGE_CHARS = 12_000
-const MAX_HISTORY_BYTES = 750_000
-const CONNECTION_FRESHNESS_MS = 300_000
 const CONNECTION_CHECK_FAILED = "Không xác minh được kết nối AI. Thử kiểm tra lại trước khi gửi câu hỏi."
 
 const initialMessages: AdvisorMessage[] = [
@@ -100,6 +96,7 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
   const endRef = useRef<HTMLDivElement | null>(null)
 
   const [activePrompts, setActivePrompts] = useState<string[]>(quickPrompts)
+
   const [connection, setConnection] = useState<ConnectionState>({ state: "checking" })
 
   const checkConnection = async () => {
@@ -144,8 +141,12 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
   useEffect(() => {
     if (!open) return
     setTyping(false)
-    void checkConnection()
+    setConnection({ state: "checking" })
+    // StrictMode discards its first effect setup before this task runs.
+    // Profile/topic changes do not spend tokens on another connection probe.
+    const timer = window.setTimeout(() => void checkConnection(), 0)
     return () => {
+      window.clearTimeout(timer)
       connectionVersion.current += 1
       requestVersion.current += 1
       connectionRequest.current?.abort()
@@ -153,17 +154,7 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
       chatBusy.current = false
       probeBusy.current = false
     }
-  }, [open, snapshotKey, token])
-
-  useEffect(() => {
-    if (connection.state !== "online") return
-    const elapsed = Date.now() - Date.parse(connection.checkedAt)
-    const remaining = Number.isFinite(elapsed) ? Math.max(0, CONNECTION_FRESHNESS_MS - elapsed) : 0
-    const timer = window.setTimeout(() => {
-      setConnection({ state: "offline", message: "Kết quả kiểm tra kết nối đã hết hiệu lực. Kiểm tra lại để tiếp tục." })
-    }, remaining)
-    return () => window.clearTimeout(timer)
-  }, [connection])
+  }, [open])
 
   const changeTopic = (code: string) => {
     requestVersion.current += 1
@@ -180,7 +171,7 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
   }, [messages, typing])
 
   const send = async (text: string) => {
-    if (!text.trim() || text.trim().length > 12_000 || typing || chatBusy.current || connection.state !== "online") return
+    if (!text.trim() || text.trim().length > 4000 || typing || chatBusy.current || connection.state !== "online") return
     const userMsg: AdvisorMessage = {
       id: ++messageSequence.current,
       role: "user",
@@ -195,17 +186,10 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
     activeRequest.current = controller
 
     try {
-      const previousMessages = messages.filter(message => message.id !== 1).slice(-MAX_HISTORY_MESSAGES)
-      const boundedHistory: Array<{ role: "assistant" | "user"; content: string }> = []
-      let historyBytes = 0
-      for (const message of previousMessages.toReversed()) {
-        const content = message.content.slice(-MAX_HISTORY_MESSAGE_CHARS)
-        const entry = { role: message.role, content }
-        const size = new TextEncoder().encode(JSON.stringify(entry)).length + 1
-        if (boundedHistory.length >= MAX_HISTORY_MESSAGES || historyBytes + size > MAX_HISTORY_BYTES) break
-        boundedHistory.unshift(entry)
-        historyBytes += size
-      }
+      const history = messages.slice(-10).map((m) => ({
+        role: m.role,
+        content: m.content.slice(0, 4000),
+      }))
 
       const response = await requestJSON<{
         reply: string
@@ -224,7 +208,7 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
           ...buildEvaluateProfilePayload(assessment),
           message: text.trim(),
           major_code: context || null,
-          history: boundedHistory,
+          history,
           connection_revision: connection.revisionToken,
         }),
       }, CHAT_TIMEOUT_MS)
@@ -232,8 +216,8 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
       if (version !== requestVersion.current || controller.signal.aborted) return
       if (typeof response.reply !== "string" || !response.reply.trim()) throw new Error("Missing guidance response")
       setContext(response?.context_major_code || "")
-      if (!response.connection_available) {
-        setConnection({ state: "offline", message: "Kết nối AI đã hết hiệu lực. Hãy kiểm tra lại trước khi gửi câu hỏi khác." })
+      if (!response.connection_available && (response.is_ai_generated || response.is_fallback)) {
+        setConnection({ state: "offline", message: "Chưa nhận được phản hồi AI. Bạn có thể kiểm tra lại kết nối." })
       }
 
       if (response?.suggested_followups && response.suggested_followups.length > 0) {
@@ -253,7 +237,6 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
       if (version !== requestVersion.current || controller.signal.aborted) return
       if (error instanceof ApiError && error.status === 409) {
         setConnection({ state: "offline", message: "Kết nối AI đã thay đổi. Hãy kiểm tra lại trước khi gửi câu hỏi khác." })
-        void checkConnection()
       } else {
         setConnection({ state: "offline", message: unavailableReply })
       }
@@ -287,7 +270,7 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
       .join(", ")
     setInput(
       (prev) =>
-        `${prev ? `${prev} ` : ""}Điểm số của mình: ${summary || "chưa có điểm được nhập"}`.slice(0, 12_000),
+        `${prev ? `${prev} ` : ""}Điểm số của mình: ${summary || "chưa có điểm được nhập"}`,
     )
   }
 
@@ -322,11 +305,11 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
             <header className="border-b border-slate-200/80 bg-white/80 px-5 py-4 backdrop-blur-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-sm">
+                  <span className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-sm">
                     <Bot size={22} />
                   </span>
                   <div>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <div className="flex items-center gap-2">
                       <h2 className="text-base font-bold text-slate-900">
                         Cố vấn AI Hướng nghiệp
                       </h2>
@@ -341,7 +324,7 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => setFullscreen((v) => !v)}
@@ -419,7 +402,7 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
                       )}
                     </span>
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                      className={`min-w-0 max-w-[85%] overflow-hidden rounded-2xl px-4 py-3 text-sm leading-relaxed break-words ${
                         message.role === "assistant"
                           ? "rounded-tl-md border border-slate-200/80 bg-white text-slate-800 shadow-xs"
                           : "rounded-tr-md bg-sky-600 text-white shadow-sm"
@@ -428,14 +411,37 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
                       {message.role === "assistant" ? (
                         <>
                           {message.source && <p className={`mb-2 text-[11px] font-semibold ${message.source === "offline_guidance" ? "text-amber-700" : "text-slate-500"}`}>{message.source === "offline_guidance" ? "Hướng dẫn có sẵn — AI chưa kết nối" : "Hướng dẫn từ dữ liệu hệ thống"}</p>}
-                          <div className="markdown advisor-markdown">
-                            <Markdown remarkPlugins={[remarkGfm]}>
+                          <div className="markdown advisor-markdown min-w-0 max-w-full">
+                            <Markdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                pre: ({ children }) => (
+                                  <div className="my-2.5 max-w-full overflow-x-auto rounded-xl border border-slate-200/90 bg-slate-900 text-slate-100 shadow-2xs">
+                                    <pre className="m-0 w-max min-w-full p-3.5 text-xs leading-relaxed font-mono">
+                                      {children}
+                                    </pre>
+                                  </div>
+                                ),
+                                code: ({ className, children, ...props }) => (
+                                  <code className={className} {...props}>
+                                    {children}
+                                  </code>
+                                ),
+                                table: ({ children }) => (
+                                  <div className="my-3 max-w-full overflow-x-auto rounded-xl border border-slate-200/80">
+                                    <table className="w-full min-w-max border-collapse text-xs sm:text-sm">
+                                      {children}
+                                    </table>
+                                  </div>
+                                ),
+                              }}
+                            >
                               {message.content}
                             </Markdown>
                           </div>
                         </>
                       ) : (
-                        <span>{message.content}</span>
+                        <span className="whitespace-pre-wrap break-words">{message.content}</span>
                       )}
                     </div>
                   </motion.div>
@@ -494,13 +500,13 @@ export function AIChatAdvisor({ open, onClose }: AIChatAdvisorProps) {
                     onClick={attachStudentProfile}
                     disabled={connection.state !== "online" || typing}
                     title="Đính kèm điểm học tập"
-                    className="grid size-10 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-sky-600 disabled:opacity-40"
+                    className="grid size-10 shrink-0 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-sky-600"
                   >
                     <Paperclip size={18} />
                   </button>
                   <textarea
                     rows={1}
-                    maxLength={12_000}
+                    maxLength={4000}
                     aria-label="Câu hỏi hướng nghiệp"
                     value={input}
                     disabled={connection.state !== "online" || typing}

@@ -6,7 +6,7 @@ export function useSelectedAssessment() {
   const { assessment, history, activeHistoryId } = useAssessment()
   return useMemo(() => {
     const index = activeHistoryId ? history.findIndex(item => item.id === activeHistoryId) : 0
-    const snapshot = index > 0 ? history[index] : undefined
+    const snapshot = index > 0 ? history[index] : (!assessment.completed ? history[0] : undefined)
     return snapshot ? {
       ...assessment,
       answers: snapshot.answers || {}, cognitive: snapshot.cognitive || {},

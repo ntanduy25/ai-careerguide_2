@@ -3,6 +3,7 @@ import {
   BrainCircuit,
   ClipboardCheck,
   Compass,
+  GraduationCap,
   LogIn,
   LogOut,
   Map,
@@ -46,6 +47,11 @@ const mainLinks = [
   {
     label: "Khám phá ngành",
     href: "/dashboard",
+    icon: GraduationCap,
+  },
+  {
+    label: "Danh mục ngành",
+    href: "/majors",
     icon: Compass,
   },
   {
@@ -116,7 +122,7 @@ function SidebarBody({
     if (onOpenSearch) {
       onOpenSearch()
     } else {
-      navigate("/dashboard")
+      navigate("/majors?search=1")
     }
   }
 

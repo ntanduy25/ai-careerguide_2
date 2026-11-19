@@ -17,7 +17,7 @@ export function RiasecRadarChart({
   data = riasecData,
 }: RiasecRadarChartProps) {
   return (
-    <div className="h-80 sm:h-88 xl:h-96 w-full pt-2">
+    <div className="h-64 sm:h-76 xl:h-88 w-full min-w-0 pt-2">
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={data} outerRadius="72%">
           <PolarGrid stroke="rgba(148, 163, 184, 0.28)" strokeDasharray="3 3" />

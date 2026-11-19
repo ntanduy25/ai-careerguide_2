@@ -161,5 +161,5 @@ class AIChatConnectionResponse(BaseModel):
     message: str
     checked_at: str
     latency_ms: float
-    # Random, short-lived receipt. Never expose the configuration fingerprint.
+    # Opaque signed proof bound to the configuration; no timed chat expiry.
     revision_token: str = ""

@@ -205,7 +205,7 @@ async def chat_with_counselor(
     current_user: Optional[User] = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Career-only trusted rendering; student evidence is not sent to a provider."""
+    """Locally gate scope before any conversational provider generation."""
     response.headers["Cache-Control"] = "no-store"
     user_id = current_user.id if current_user else None
     return await service.chat_with_career_counselor(db, payload, user_id)

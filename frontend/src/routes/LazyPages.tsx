@@ -4,6 +4,7 @@ export const Dashboard = lazy(() => import("../pages/Dashboard").then(module => 
 export const Login = lazy(() => import("../pages/Login").then(module => ({ default: module.Login })))
 export const GoogleCallback = lazy(() => import("../pages/GoogleCallback").then(module => ({ default: module.GoogleCallback })))
 export const MajorDetail = lazy(() => import("../pages/MajorDetail").then(module => ({ default: module.MajorDetail })))
+export const MajorsCatalog = lazy(() => import("../pages/MajorsCatalog").then(module => ({ default: module.MajorsCatalog })))
 export const RoadmapView = lazy(() => import("../pages/RoadmapView").then(module => ({ default: module.RoadmapView })))
 export const AdminGovernance = lazy(() => import("../pages/AdminHITLDashboard").then(module => ({ default: module.AdminHITLDashboard })))
 export const AdminCatalog = lazy(() => import("../pages/AdminCatalogPage").then(module => ({ default: module.AdminCatalogPage })))

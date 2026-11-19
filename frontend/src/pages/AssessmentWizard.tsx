@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
-  Eye,
   Layers,
   LayoutDashboard,
   ListChecks,
@@ -105,7 +104,7 @@ const defaultRiasecFallback: QuestionItem[] = CANONICAL_30_CODES.map(
 
 export function AssessmentWizard() {
   const { user, token } = useAuth()
-  const { assessment, history, update, reset, recordCompletedAttempt } = useAssessment()
+  const { assessment, history, update, reset, recordCompletedAttempt, selectHistoryAttempt } = useAssessment()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [sessionStarted, setSessionStarted] = useState<boolean>(
@@ -672,6 +671,9 @@ export function AssessmentWizard() {
               <button
                 type="button"
                 onClick={() => {
+                  if (!assessment.completed && history[0]) {
+                    selectHistoryAttempt(history[0].id)
+                  }
                   setIsReviewMode(true)
                   setStep(1)
                   setCardIndex(0)
@@ -760,11 +762,19 @@ export function AssessmentWizard() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
-            onClick={() => navigate("/dashboard")}
+            onClick={() => {
+              if (hasCompletedAttempt) {
+                setIsReviewMode(false)
+                setSessionStarted(false)
+                window.scrollTo({ top: 0, behavior: "smooth" })
+              } else {
+                navigate("/dashboard")
+              }
+            }}
             className="inline-flex items-center gap-2 rounded-2xl border border-white/90 bg-white/75 px-4 py-2 text-xs sm:text-sm font-extrabold text-slate-700 shadow-xs backdrop-blur-md transition hover:bg-white hover:text-sky-700 hover:shadow-sm"
           >
             <ArrowLeft className="size-4 text-sky-600" />
-            <span>Quay lại Dashboard</span>
+            <span>Quay lại</span>
           </button>
 
           <div className="flex items-center gap-2">
@@ -780,58 +790,6 @@ export function AssessmentWizard() {
             </button>
           </div>
         </div>
-
-        {/* Review Mode Banner */}
-        {isReviewMode && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-sky-200/90 bg-gradient-to-r from-sky-50 via-sky-100/70 to-white/95 p-4 text-sky-950 shadow-sm backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-sky-600 text-white shadow-md">
-                <Eye className="size-6" />
-              </span>
-              <div>
-                <h4 className="text-sm sm:text-base font-black text-sky-950">
-                  Chế độ xem lại các câu hỏi đã trả lời
-                </h4>
-                <p className="text-xs font-semibold text-sky-700">
-                  Bạn đang xem lại bài trắc nghiệm. Nhấn vào từng bước để kiểm tra chi tiết.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  reset()
-                  setStep(1)
-                  setCardIndex(0)
-                  setCogIndex(0)
-                  setIsReviewMode(false)
-                  setSessionStarted(true)
-                }}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-sky-300 bg-white px-3 py-2 text-xs font-extrabold text-sky-800 shadow-2xs transition hover:bg-sky-50"
-              >
-                <RotateCcw className="size-3.5" />
-                <span>Bắt đầu bài mới</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSessionStarted(false)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white/85 px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-slate-100"
-              >
-                <ArrowLeft className="size-3.5" />
-                <span>Quay lại cổng chọn</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/dashboard")}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-black text-white shadow-xs transition hover:bg-sky-700"
-              >
-                <LayoutDashboard className="size-3.5" />
-                <span>Xem kết quả Dashboard</span>
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Top Liquid Glass Step Bar */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/85 bg-white/60 px-3.5 py-2 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_10px_28px_rgba(14,165,233,0.08)] backdrop-blur-2xl">
@@ -1440,7 +1398,7 @@ function HelpGuideCollapsible() {
                   <span className="grid size-5 shrink-0 place-items-center rounded-full bg-sky-100 text-[10px] font-black text-sky-800">
                     2
                   </span>
-                  <span>Điểm số thể hiện mức độ hứng thú công việc, không đo lường áp lực hay điểm học lực.</span>
+                  <span>Nếu có dịp làm những việc này ở trường, ở nhà hoặc cùng bạn bè, hãy chọn theo cảm nhận thật — không đo điểm học lực.</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="grid size-5 shrink-0 place-items-center rounded-full bg-sky-100 text-[10px] font-black text-sky-800">

@@ -2,7 +2,6 @@ import { completeTranscriptBlocks } from "../utils/assessmentEvidence"
 import {
   ArrowRight,
   CheckCircle2,
-  ChevronRight,
   ClipboardCheck,
   Clock,
   Compass,
@@ -11,12 +10,11 @@ import {
   GraduationCap,
   History,
   RotateCcw,
-  Search,
   Sparkles,
   Trash2,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Link, useNavigate, useSearchParams } from "react-router"
+import { Link, useNavigate } from "react-router"
 import { Badge } from "../components/common/Badge"
 import { Button } from "../components/common/Button"
 import { Card } from "../components/common/Card"
@@ -25,11 +23,10 @@ import { HollandInterestSummary } from "../components/assessment/HollandInterest
 import { RiasecRadarChart } from "../components/visualization/RiasecRadarChart"
 import { AspirationAlignmentCard } from "../components/xai/AspirationAlignmentCard"
 import { SkillAnalysisCard } from "../components/xai/SkillAnalysisCard"
-import { TrendBadge } from "../components/xai/TrendBadge"
 import { TwoTierFunnelRecommendation } from "../components/xai/TwoTierFunnelRecommendation"
 import { useAuth } from "../context/AuthContext"
 import { useAssessment } from "../hooks/useAssessment"
-import { apiRequest, authPut } from "../services/api"
+import { apiRequest, requestJSON } from "../services/api"
 import {
   riasecData as fallbackRiasec,
   type RiasecRadarPoint,
@@ -74,20 +71,6 @@ interface DashboardOverviewPayload {
   aspirationAnalysis?: AspirationAnalysisPayload | null
 }
 
-interface TaxonomyCatalogItem {
-  major_code: string
-  name_vi?: string
-  name?: string
-  category?: string
-  description?: string
-  subject_blocks?: string[]
-  blocks?: string[]
-  is_trending?: boolean
-  trend_tier?: "TIER_1" | "TIER_2" | "TIER_3" | null
-  trend_priority?: number
-  trend_reason?: string | null
-}
-
 const ARCHETYPES: Record<string, string> = {
   I: "Nhà nghiên cứu Khoa học",
   R: "Kỹ sư Thực hành & Công nghệ",
@@ -113,35 +96,28 @@ function formatDateTimeVi(iso?: string): string {
   }
 }
 
+function hasUsableAssessmentData(state: Pick<AssessmentState, "answers" | "scores">): boolean {
+  const hasAnswers = Object.keys(state.answers || {}).length >= 3
+  const hasScores = (state.scores || []).length >= 2
+  return hasAnswers || hasScores
+}
+
 export function Dashboard() {
-  const { user, updateUser } = useAuth()
+  const { user } = useAuth()
   const {
     assessment,
     history,
     activeHistoryId,
+    hydrating,
     update,
     reset,
     selectHistoryAttempt,
     deleteHistoryAttempt,
   } = useAssessment()
 
-  const [selectedGradeLevel, setSelectedGradeLevel] = useState<string>(
-    () =>
-      user?.grade_level ||
-      localStorage.getItem("career-guide:profile:grade_level") ||
-      "Lớp 12",
-  )
-  const [selectedGender, setSelectedGender] = useState<string>(
-    () =>
-      user?.gender ||
-      localStorage.getItem("career-guide:profile:gender") ||
-      "Nam",
-  )
-
-  useEffect(() => {
-    if (user?.grade_level) setSelectedGradeLevel(user.grade_level)
-    if (user?.gender) setSelectedGender(user.gender)
-  }, [user?.grade_level, user?.gender])
+  // The saved profile is the only source of demographic context here.
+  const profileGradeLevel = user?.grade_level?.trim() || undefined
+  const profileGender = user?.gender?.trim() || undefined
 
   const activeAttemptIndex = useMemo(() => {
     if (!activeHistoryId) return 0
@@ -151,10 +127,7 @@ export function Dashboard() {
   const activeAttempt = history[activeAttemptIndex] || null
 
   const effectiveAssessment = useMemo<AssessmentState>(() => {
-    if (activeAttemptIndex === 0) {
-      return assessment
-    }
-    if (activeAttempt) {
+    if (activeAttemptIndex > 0 && activeAttempt) {
       return {
         step: 4,
         answers: activeAttempt.answers || {},
@@ -165,18 +138,29 @@ export function Dashboard() {
         completedAt: activeAttempt.createdAt,
       }
     }
+    if (assessment.completed && hasUsableAssessmentData(assessment)) {
+      return assessment
+    }
+    if (history[0] && hasUsableAssessmentData(history[0])) {
+      return {
+        step: 4,
+        answers: history[0].answers || {},
+        cognitive: history[0].cognitive || {},
+        scores: history[0].scores || [],
+        aspiration: history[0].aspiration,
+        completed: true,
+        completedAt: history[0].createdAt,
+      }
+    }
     return assessment
-  }, [assessment, activeAttempt, activeAttemptIndex])
+  }, [assessment, history, activeAttempt, activeAttemptIndex])
 
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
   const [data, setData] = useState<DashboardOverviewPayload | null>(null)
   const [isEvaluating, setIsEvaluating] = useState(false)
   const [isAnalyzingAspiration, setIsAnalyzingAspiration] = useState(false)
-  const [catalog, setCatalog] = useState<TaxonomyCatalogItem[]>([])
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("ALL")
-  const [showAllCatalog, setShowAllCatalog] = useState(false)
+  const [evaluateError, setEvaluateError] = useState<string | null>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false)
   const [skillAnalysis, setSkillAnalysis] =
     useState<StudentSkillAnalysis | null>(null)
@@ -184,42 +168,51 @@ export function Dashboard() {
   const aspirationRequest = useRef(0)
   const profileRef = useRef(effectiveAssessment)
   useEffect(() => { profileRef.current = effectiveAssessment }, [effectiveAssessment])
-  const catalogRef = useRef<HTMLDivElement>(null)
   const reportTopRef = useRef<HTMLDivElement>(null)
 
-  const hasCompletedAssessment = useMemo(() => {
-    const hasAnswers = Object.keys(effectiveAssessment.answers || {}).length >= 3
-    const hasScores = (effectiveAssessment.scores || []).length >= 2
-    return Boolean(
-      effectiveAssessment.completed && (hasAnswers || hasScores),
-    )
-  }, [effectiveAssessment.completed, effectiveAssessment.answers, effectiveAssessment.scores])
+  const hasUsableData = useMemo(
+    () => hasUsableAssessmentData(effectiveAssessment),
+    [effectiveAssessment],
+  )
+  const hasCompletedAssessment = Boolean(hasUsableData)
+  const isDraftPreview = Boolean(hasUsableData && !effectiveAssessment.completed)
 
   useEffect(() => {
     let mounted = true
+    const controller = new AbortController()
     const request = ++aspirationRequest.current
     setData(null)
+    setEvaluateError(null)
     if (hasCompletedAssessment) {
       setIsEvaluating(true)
       setIsAnalyzingAspiration(true)
       const payload = buildEvaluateProfilePayload(effectiveAssessment, 435, {
-        gender: selectedGender,
-        grade_level: selectedGradeLevel,
+        gender: profileGender,
+        grade_level: profileGradeLevel,
       })
-      apiRequest<DashboardOverviewPayload | null>(
+      requestJSON<DashboardOverviewPayload | null>(
         "/recommender/evaluate",
-        null,
         {
           method: "POST",
+          signal: controller.signal,
           body: JSON.stringify(payload),
         },
       )
         .then((res) => {
           if (mounted && request === aspirationRequest.current && res && res.funnel) {
             setData(res)
+            setEvaluateError(null)
           }
         })
-        .catch(() => {})
+        .catch((err) => {
+          if (mounted && request === aspirationRequest.current && !(err instanceof DOMException && err.name === "AbortError")) {
+            setEvaluateError(
+              err instanceof Error && err.message
+                ? err.message
+                : "Không tải được kết quả đề xuất ngành từ máy chủ. Vui lòng thử lại.",
+            )
+          }
+        })
         .finally(() => {
           if (mounted && request === aspirationRequest.current) {
             setIsEvaluating(false)
@@ -228,51 +221,23 @@ export function Dashboard() {
         })
     } else {
       setData(null)
+      setEvaluateError(null)
       setIsEvaluating(false)
       setIsAnalyzingAspiration(false)
     }
 
-    apiRequest<TaxonomyCatalogItem[] | null>(
-      "/taxonomy/majors?limit=1000",
-      [],
-    )
-      .then((list) => {
-        if (mounted && list && Array.isArray(list)) {
-          setCatalog(list)
-        }
-      })
-      .catch(() => {})
-
     return () => {
       mounted = false
+      controller.abort()
     }
   }, [
     hasCompletedAssessment,
     effectiveAssessment,
-    selectedGender,
-    selectedGradeLevel,
+    profileGender,
+    profileGradeLevel,
     activeHistoryId,
+    reloadNonce,
   ])
-
-  const handleUpdateProfileContext = (
-    nextGradeLevel: string,
-    nextGender: string,
-  ) => {
-    setSelectedGradeLevel(nextGradeLevel)
-    setSelectedGender(nextGender)
-    localStorage.setItem("career-guide:profile:grade_level", nextGradeLevel)
-    localStorage.setItem("career-guide:profile:gender", nextGender)
-    if (user) {
-      updateUser({ grade_level: nextGradeLevel, gender: nextGender })
-      void authPut("/identity/profile", {
-        full_name: user.name,
-        gender: nextGender,
-        grade_level: nextGradeLevel,
-        school_class: user.school_class || "",
-        school_name: user.school_name || "",
-      }).catch(() => {})
-    }
-  }
 
   // Agent "Phân tích kỹ năng": ưu/nhược điểm học tập + kỹ năng cần bổ sung
   // (cache theo hồ sơ năng lực ở backend nên chỉ tốn AI lần đầu).
@@ -321,7 +286,7 @@ export function Dashboard() {
     try {
       const response = await apiRequest<DashboardOverviewPayload | null>("/recommender/evaluate", null, {
         method: "POST",
-        body: JSON.stringify(buildEvaluateProfilePayload({ ...snapshot, aspiration: nextAspiration }, 435, { gender: selectedGender, grade_level: selectedGradeLevel })),
+        body: JSON.stringify(buildEvaluateProfilePayload({ ...snapshot, aspiration: nextAspiration }, 435, { gender: profileGender, grade_level: profileGradeLevel })),
       })
       if (request !== aspirationRequest.current || profileRef.current !== snapshot) throw new Error("Hồ sơ đã đổi")
       if (!response?.aspirationAnalysis) throw new Error("Chưa có phân tích")
@@ -331,12 +296,6 @@ export function Dashboard() {
       if (request === aspirationRequest.current) { setIsAnalyzingAspiration(false); setIsEvaluating(false) }
     }
   }
-
-  useEffect(() => {
-    if (searchParams.get("search") === "1" && catalogRef.current) {
-      catalogRef.current.scrollIntoView({ behavior: "smooth" })
-    }
-  }, [searchParams])
 
   // Merge user's live/selected assessment answers & scores into RIASEC radar data (prioritizing Backend result)
   const displayedRiasec: RiasecRadarPoint[] = useMemo(() => {
@@ -405,35 +364,6 @@ export function Dashboard() {
 
   const activeFunnel: FunnelRecommendationData = data?.funnel ?? { tier1_fields: [], all_majors: [] }
 
-  const categories = useMemo(() => {
-    const set = new Set<string>()
-    catalog.forEach((m) => {
-      if (m.category) set.add(m.category)
-    })
-    return ["ALL", ...Array.from(set)]
-  }, [catalog])
-
-  const filteredCatalog = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    return catalog
-      .filter((item) => {
-        const majorName = (item.name_vi || item.name || "").toLowerCase()
-        const matchCat =
-          selectedCategory === "ALL" || item.category === selectedCategory
-        const matchQuery =
-          !q ||
-          item.major_code.toLowerCase().includes(q) ||
-          majorName.includes(q) ||
-          (item.category && item.category.toLowerCase().includes(q))
-        return matchCat && matchQuery
-      })
-      .sort((a, b) => (b.trend_priority || 0) - (a.trend_priority || 0))
-  }, [catalog, searchQuery, selectedCategory])
-
-  const visibleCatalog = showAllCatalog
-    ? filteredCatalog
-    : filteredCatalog.slice(0, 9)
-
   const handleExportPdf = () => {
     window.print()
   }
@@ -453,16 +383,16 @@ export function Dashboard() {
   const displayName = user?.name || data?.user_name || "Học sinh"
 
   return (
-    <section className="py-9 sm:py-12" ref={reportTopRef}>
+    <section className="py-6 sm:py-9 lg:py-11" ref={reportTopRef}>
       <PageContainer>
         {/* Header */}
-        <div className="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-          <div>
+        <div className="mb-6 flex flex-col justify-between gap-4 sm:mb-8 lg:flex-row lg:items-end">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sky-600">
               <Sparkles size={14} />
               AI CareerGuide · 435 Ngành
             </div>
-            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl xl:text-4xl">
               {hasCompletedAssessment
                 ? `Chào ${displayName}, đề xuất ngành của bạn.`
                 : `Chào ${displayName}, khám phá bản thân.`}
@@ -470,7 +400,7 @@ export function Dashboard() {
           </div>
 
           {hasCompletedAssessment && (
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
               {history.length > 0 && (
                 <Button
                   variant="secondary"
@@ -501,8 +431,18 @@ export function Dashboard() {
         {activeAttemptIndex === 0 && assessment.syncStatus === "LOCAL_ONLY" && <p role="status" className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Đã lưu trên thiết bị, chưa đồng bộ máy chủ. Bài làm vẫn được giữ trên trình duyệt này; hãy mở lại bài đánh giá và gửi lại khi kết nối hoạt động.</p>}
         {activeAttemptIndex === 0 && assessment.syncStatus === "SYNCED" && assessment.submissionId && <p role="status" className="mb-5 text-xs text-slate-600">Đã đồng bộ bài đánh giá với máy chủ.</p>}
 
-        {/* Liquid Glass Empty State when Student has NOT completed the Assessment */}
-        {!hasCompletedAssessment ? (
+        {/* Liquid Glass Hydrating / Empty State when Student has NOT completed the Assessment */}
+        {!hasCompletedAssessment && hydrating ? (
+          <div className="mb-10 rounded-[32px] border border-white/80 bg-white/60 p-10 text-center shadow-[0_18px_50px_rgba(14,165,233,0.1)] backdrop-blur-2xl sm:p-14">
+            <div className="mx-auto mb-3 size-10 animate-spin rounded-full border-4 border-sky-200 border-t-sky-600" />
+            <h2 className="text-lg font-extrabold text-slate-800">
+              Đang đồng bộ hồ sơ đánh giá của bạn...
+            </h2>
+            <p className="mt-1.5 text-sm text-slate-500">
+              Hệ thống đang kiểm tra bài trắc nghiệm đã lưu trên tài khoản của bạn.
+            </p>
+          </div>
+        ) : !hasCompletedAssessment ? (
           <div className="relative mb-10 overflow-hidden rounded-[36px] border border-white/80 bg-white/40 p-8 shadow-[0_24px_80px_rgba(14,165,233,0.14)] backdrop-blur-2xl sm:p-14">
             <div className="pointer-events-none absolute -left-16 -top-16 size-72 rounded-full bg-sky-300/35 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-20 -right-16 size-80 rounded-full bg-cyan-200/40 blur-3xl" />
@@ -517,25 +457,29 @@ export function Dashboard() {
                 Làm bài đánh giá để mở khóa đề xuất từ 435 ngành
               </h2>
 
-              <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              <div className="mt-8 grid gap-3.5 sm:grid-cols-3 sm:gap-4">
                 {[
-                  { weight: "45%", title: "Sở thích RIASEC" },
-                  { weight: "35%", title: "Học lực Z-Score" },
-                  { weight: "20%", title: "Nhận thức" },
+                  { title: "Sở thích RIASEC", desc: "Thiên hướng 6 nhóm nghề nghiệp" },
+                  { title: "Học lực & Tổ hợp", desc: "Đối chiếu chuẩn tuyển sinh" },
+                  { title: "Phong cách nhận thức", desc: "Thói quen học tập & tư duy" },
                 ].map((pillar) => (
                   <div
                     key={pillar.title}
-                    className="rounded-3xl border border-white/80 bg-white/50 p-5 text-center shadow-[0_8px_30px_rgba(14,165,233,0.07)] backdrop-blur-xl"
+                    className="rounded-3xl border border-white/80 bg-white/50 p-4 text-center shadow-[0_8px_30px_rgba(14,165,233,0.07)] backdrop-blur-xl sm:p-5"
                   >
-                    <p className="text-2xl font-black text-sky-600">
-                      {pillar.weight}
-                    </p>
-                    <h3 className="mt-1 text-sm font-extrabold text-slate-900">
+                    <h3 className="text-sm font-extrabold text-sky-700 sm:text-base">
                       {pillar.title}
                     </h3>
+                    <p className="mt-1.5 text-xs font-medium leading-relaxed text-slate-600">
+                      {pillar.desc}
+                    </p>
                   </div>
                 ))}
               </div>
+
+              <p className="mt-4 text-xs font-medium text-slate-500">
+                Hệ số trọng số tự động điều chỉnh linh hoạt theo khối lớp và dữ liệu hồ sơ của bạn.
+              </p>
 
               <div className="mt-9 flex justify-center">
                 <Link to="/assessment">
@@ -551,9 +495,28 @@ export function Dashboard() {
           </div>
         ) : (
           <>
+            {isDraftPreview && (
+              <div
+                role="status"
+                className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-xs sm:text-sm text-amber-900"
+              >
+                <span>
+                  Bạn đang xem đề xuất tạm từ bài làm chưa bấm hoàn tất. Hãy mở mục{" "}
+                  <strong>Trắc nghiệm</strong> và bấm <strong>Hoàn tất</strong> ở bước cuối để lưu chính thức lên máy chủ.
+                </span>
+                <Link
+                  to="/assessment"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-amber-600 px-3.5 py-1.5 text-xs font-extrabold text-white transition hover:bg-amber-700"
+                >
+                  Hoàn tất trắc nghiệm
+                  <ArrowRight size={13} />
+                </Link>
+              </div>
+            )}
+
             {/* Collapsible History Drawer (only visible when user clicks "Lịch sử" or has multiple attempts) */}
             {(showHistoryDrawer || history.length > 1) && (
-              <div className="mb-6 rounded-3xl border border-white/80 bg-white/50 p-4 shadow-[0_10px_35px_rgba(14,165,233,0.08)] backdrop-blur-xl">
+              <div className="mb-6 min-w-0 rounded-2xl border border-white/80 bg-white/50 p-3.5 shadow-[0_10px_35px_rgba(14,165,233,0.08)] backdrop-blur-xl sm:rounded-3xl sm:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 text-xs font-bold text-slate-800">
                     <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-sky-500/15 text-sky-600">
@@ -579,7 +542,7 @@ export function Dashboard() {
                           <button
                             type="button"
                             onClick={() => handleSelectHistory(item.id)}
-                            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                            className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition sm:px-3 ${
                               isCurrent
                                 ? "bg-sky-600 text-white shadow-xs"
                                 : "border border-white/80 bg-white/60 text-slate-600 hover:bg-white hover:text-sky-700"
@@ -607,73 +570,92 @@ export function Dashboard() {
             )}
 
             {/* 1. Hồ sơ RIASEC & Phễu Ngành đề xuất 2 tầng */}
-            <div className="mb-8 grid gap-6 lg:grid-cols-12 xl:gap-8">
+            <div className="mb-8 grid min-w-0 gap-6 xl:grid-cols-12 xl:gap-8">
               {/* Left Column: Single Unified Profile Card */}
-              <div className="lg:col-span-5 xl:col-span-4">
-                <Card className="rounded-2xl p-5 sm:rounded-3xl sm:p-6 sticky top-4">
-                  <div className="flex items-start justify-between">
-                    <div>
+              <div className="min-w-0 xl:col-span-4">
+                <Card className="rounded-2xl p-4 sm:rounded-3xl sm:p-6 xl:sticky xl:top-6">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
                       <p className="text-xs font-bold uppercase tracking-wider text-sky-700">
                         Hồ sơ Định hướng
                       </p>
-                      <h2 className="mt-1 text-xl font-bold text-slate-900 sm:text-2xl">
+                      <h2 className="mt-1 break-words text-lg font-bold text-slate-900 sm:text-xl xl:text-2xl">
                         {archetypeTitle}
                       </h2>
                     </div>
-                    <Badge tone="indigo">{hollandCodeBadge}</Badge>
+                    <Badge tone="indigo" className="shrink-0 whitespace-nowrap">{hollandCodeBadge}</Badge>
                   </div>
 
-                  {interestEvidence.status === "COMPLETE" && displayedRiasec.length === 6 && displayedRiasec.every(point => Number.isFinite(point.value)) ? <RiasecRadarChart data={displayedRiasec} /> : <HollandInterestSummary evidence={interestEvidence} />}
+                  <div className="md:grid md:grid-cols-12 md:items-center md:gap-6 xl:block">
+                    <div className="md:col-span-6 xl:col-span-12">
+                      {interestEvidence.status === "COMPLETE" && displayedRiasec.length === 6 && displayedRiasec.every(point => Number.isFinite(point.value)) ? <RiasecRadarChart data={displayedRiasec} /> : <HollandInterestSummary evidence={interestEvidence} />}
+                    </div>
 
-                  <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-2.5">
-                    {top3Dimensions.map((item) => (
-                      <div
-                        className="rounded-xl border border-slate-200/80 bg-white/70 p-2.5 text-center sm:p-3"
-                        key={item.key}
-                      >
-                        <p className="text-base font-bold text-sky-600 sm:text-lg">
-                          {item.key}
-                        </p>
-                        <p className="text-xs font-medium text-slate-500">
-                          {item.label}
-                        </p>
-                        <p className="mt-1 text-sm font-bold tabular-nums text-slate-900">
-                          {item.value}%
-                        </p>
+                    <div className="md:col-span-6 xl:col-span-12">
+                      <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-2.5">
+                        {top3Dimensions.map((item) => (
+                          <div
+                            className="min-w-0 rounded-xl border border-slate-200/80 bg-white/70 p-2 text-center sm:p-3"
+                            key={item.key}
+                          >
+                            <p className="text-base font-bold text-sky-600 sm:text-lg">
+                              {item.key}
+                            </p>
+                            <p className="truncate text-[11px] font-medium text-slate-500 sm:text-xs">
+                              {item.label}
+                            </p>
+                            <p className="mt-1 text-xs font-bold tabular-nums text-slate-900 sm:text-sm">
+                              {item.value}%
+                            </p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <GraduationCap size={18} className="text-sky-600" />
-                      <span className="text-xs font-bold text-slate-800">
-                        {formatBlockWithSubjects(bestBlockStats.block, { short: true })}
-                        {bestBlockStats.rawSum ? ` · ${bestBlockStats.rawSum}đ` : ""}
-                      </span>
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white/70 px-3.5 py-3 sm:px-4">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <GraduationCap size={18} className="shrink-0 text-sky-600" />
+                          <span className="min-w-0 break-words text-xs font-bold text-slate-800">
+                            {formatBlockWithSubjects(bestBlockStats.block, { short: true })}
+                            {bestBlockStats.rawSum ? ` · ${bestBlockStats.rawSum}đ` : ""}
+                          </span>
+                        </div>
+                        <span className="break-words text-xs font-semibold tabular-nums text-sky-700">
+                          Z-Score {bestBlockStats.zScore} · {bestBlockStats.percentile}
+                        </span>
+                      </div>
+                      {bestBlockStats.failingSubjects.length > 0 && (
+                        <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                          Cảnh báo điểm liệt: {bestBlockStats.failingSubjects.join(", ")}
+                        </div>
+                      )}
                     </div>
-                    <span className="text-xs font-semibold tabular-nums text-sky-700">
-                      Z-Score {bestBlockStats.zScore} · {bestBlockStats.percentile}
-                    </span>
                   </div>
-                  {bestBlockStats.failingSubjects.length > 0 && (
-                    <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
-                      Cảnh báo điểm liệt: {bestBlockStats.failingSubjects.join(", ")}
-                    </div>
-                  )}
                 </Card>
               </div>
 
               {/* Right Column: 2-Tier Recommendation Funnel */}
-              <div className="lg:col-span-7 xl:col-span-8">
+              <div className="min-w-0 xl:col-span-8">
+                {evaluateError && (
+                  <div
+                    role="alert"
+                    className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+                  >
+                    <span>{evaluateError}</span>
+                    <button
+                      type="button"
+                      onClick={() => setReloadNonce((n) => n + 1)}
+                      className="rounded-xl border border-rose-300 bg-white px-3.5 py-1.5 text-xs font-extrabold text-rose-700 transition hover:bg-rose-100"
+                    >
+                      Thử tải lại
+                    </button>
+                  </div>
+                )}
                 <TwoTierFunnelRecommendation
                   funnelData={activeFunnel}
                   isLoading={isEvaluating && (!activeFunnel.tier1_fields || activeFunnel.tier1_fields.length === 0)}
-                  activeGradeLevel={selectedGradeLevel}
-                  activeGender={selectedGender}
-                  horizonLabel={data?.horizon_label || activeFunnel.horizon_label}
+                  activeGradeLevel={profileGradeLevel}
+                  activeGender={profileGender}
                   weightsApplied={data?.weights_applied}
-                  onUpdateProfileContext={handleUpdateProfileContext}
                 />
               </div>
             </div>
@@ -694,107 +676,25 @@ export function Dashboard() {
           </>
         )}
 
-        {/* Full 435 MOET Majors Catalog Explorer Section */}
-        <div ref={catalogRef} className="mt-10">
-          <Card className="rounded-[32px] p-6 sm:p-8">
-            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-sky-600">
-                  <Compass size={15} />
-                  Danh mục chuẩn Bộ GD&ĐT
-                </div>
-                <h2 className="mt-1 text-xl font-black text-slate-900">
-                  Khám phá {catalog.length} ngành đào tạo
-                </h2>
+        {/* Link to separate 435 MOET Majors Catalog Page */}
+        <div className="mt-8">
+          <Card className="flex flex-col items-start justify-between gap-4 rounded-[28px] p-5 sm:flex-row sm:items-center sm:p-6">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-sky-600">
+                <Compass size={15} />
+                Danh mục chuẩn Bộ GD&ĐT
               </div>
-
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <div className="relative">
-                  <Search
-                    size={15}
-                    className="absolute left-3.5 top-3 text-slate-400"
-                  />
-                  <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Tìm mã hoặc tên ngành..."
-                    className="h-10 w-full rounded-xl border border-white/85 bg-white/65 pl-9 pr-3 text-xs font-semibold outline-none backdrop-blur-md focus:border-sky-400 focus:bg-white sm:w-60"
-                  />
-                </div>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="h-10 rounded-xl border border-white/85 bg-white/65 px-3 text-xs font-bold text-slate-700 outline-none backdrop-blur-md focus:border-sky-400"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat === "ALL" ? "Tất cả lĩnh vực" : cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <p className="mt-1 text-sm font-semibold text-slate-700">
+                Muốn tự tìm kiếm và tra cứu toàn bộ 435 ngành đào tạo theo mã ngành hoặc lĩnh vực?
+              </p>
             </div>
-
-            <div className="mt-6 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
-              {visibleCatalog.map((item) => {
-                const blocks = item.subject_blocks || item.blocks || []
-                const majorName = item.name_vi || item.name || item.major_code
-                return (
-                  <Link
-                    key={item.major_code}
-                    to={`/majors/${item.major_code}`}
-                    className="group flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white/75 p-4 transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-white hover:shadow-md"
-                  >
-                    <div>
-                      <div className="flex flex-wrap items-center justify-between gap-1.5">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="rounded-md bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
-                            Mã {item.major_code}
-                          </span>
-                          <TrendBadge
-                            tier={item.trend_tier}
-                            isTrending={item.is_trending}
-                            reason={item.trend_reason}
-                          />
-                        </div>
-                        {blocks.length > 0 && (
-                          <span className="text-xs font-medium text-slate-500">
-                            {blocks.slice(0, 3).join(", ")}
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="mt-2.5 text-sm font-bold text-slate-900 group-hover:text-sky-700 leading-snug">
-                        {majorName}
-                      </h3>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {item.category || "Danh mục ngành"}
-                      </p>
-                    </div>
-                    <div className="mt-3.5 flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs font-bold text-sky-600">
-                      <span>Xem chi tiết</span>
-                      <ChevronRight
-                        size={15}
-                        className="transition-transform group-hover:translate-x-0.5"
-                      />
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-
-            {filteredCatalog.length > 9 && (
-              <div className="mt-5 text-center">
-                <button
-                  type="button"
-                  onClick={() => setShowAllCatalog((v) => !v)}
-                  className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-extrabold text-sky-700 transition hover:bg-sky-100"
-                >
-                  {showAllCatalog
-                    ? "Thu gọn danh sách"
-                    : `Xem tất cả ${filteredCatalog.length} ngành`}
-                </button>
-              </div>
-            )}
+            <Link
+              to="/majors"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:bg-sky-700"
+            >
+              Mở Danh mục ngành
+              <ArrowRight size={15} />
+            </Link>
           </Card>
         </div>
       </PageContainer>

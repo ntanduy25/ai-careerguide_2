@@ -43,8 +43,8 @@ async def evaluate_majors_with_constraints(
     if payload.assessment_id and current_user is None:
         raise HTTPException(401, "Login required to use a saved assessment.")
     target_user_id = current_user.id if current_user else None
-    eff_gender = payload.gender or (current_user.gender if current_user else None)
-    eff_grade_level = payload.grade_level or (current_user.grade_level if current_user else None)
+    eff_gender = current_user.gender if current_user else payload.gender
+    eff_grade_level = current_user.grade_level if current_user else payload.grade_level
 
     inline_profile = payload.model_dump(exclude_unset=True, exclude={"top_k", "custom_weights"})
     inline_profile.update(gender=eff_gender, grade_level=eff_grade_level)
@@ -75,8 +75,8 @@ async def analyze_aspiration_endpoint(
     if payload.assessment_id and current_user is None:
         raise HTTPException(401, "Login required to use a saved assessment.")
     target_user_id = current_user.id if current_user else None
-    eff_gender = payload.gender or (current_user.gender if current_user else None)
-    eff_grade_level = payload.grade_level or (current_user.grade_level if current_user else None)
+    eff_gender = current_user.gender if current_user else payload.gender
+    eff_grade_level = current_user.grade_level if current_user else payload.grade_level
 
     inline_profile = payload.model_dump(exclude_unset=True, exclude={"top_k", "custom_weights"})
     inline_profile.update(gender=eff_gender, grade_level=eff_grade_level)

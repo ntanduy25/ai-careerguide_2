@@ -87,13 +87,10 @@ async def test_probe_failure_never_reports_available_or_leaks_provider_error(mon
 
 
 @pytest.mark.asyncio
-async def test_expired_or_rotated_connection_receipt_does_not_break_local_chat(monkeypatch):
-    import time
-
+async def test_rotated_connection_receipt_does_not_break_local_chat(monkeypatch):
     snapshot = _snapshot()
     monkeypatch.setattr(config_service, "resolve_snapshot", AsyncMock(return_value=snapshot))
-    token = "synthetic-receipt"
-    counselor_connection._state().receipts[token] = (snapshot.revision_token, time.monotonic() + 60)
+    token = counselor_connection._issue_receipt(snapshot.revision_token)
     assert await counselor_connection.verify_receipt(object(), token) is True
     assert await counselor_connection.verify_receipt(object(), None) is False
     changed = _snapshot("b" * 64)
@@ -172,9 +169,7 @@ async def test_availability_is_rechecked_after_local_guidance_work(monkeypatch):
     snapshot = _snapshot()
     resolver = AsyncMock(return_value=snapshot)
     monkeypatch.setattr(config_service, "resolve_snapshot", resolver)
-    import time
-    token = "synthetic-token-for-race-check-000000"
-    counselor_connection._state().receipts[token] = (snapshot.revision_token, time.monotonic() + 60)
+    token = counselor_connection._issue_receipt(snapshot.revision_token)
 
     async def facts(*args, **kwargs):
         resolver.return_value = _snapshot("b" * 64)
